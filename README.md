@@ -1,4 +1,4 @@
 # myCompiler
-a C-- compiler
+a Cminus compiler
 
 base on Cpp maybe XD
