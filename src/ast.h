@@ -30,7 +30,7 @@ public:
     llvm::Value*                                      IRBuildCompoundStmt();
     llvm::Value*                                      IRBuildStmt();
     llvm::Value*                                      IRBuildExp();
-    llvm::Value*                                      IRBuildSelect();
+    llvm::Value*                                      IRBuildSelec();
     llvm::Value*                                      IRBuildIter();
     llvm::Value*                                      IRBuildRet();
 };
@@ -514,26 +514,29 @@ llvm::Value* astNode::IRBuildCompoundStmt()
  */
 llvm::Value* astNode::IRBuildStmt()
 {
-    switch (this->childPtr[0]->nodeValue)
+    if (this->childPtr[0]->nodeValue->compare("expStmt") == 0)
     {
-    case "expStmt":
-        this->childPtr[0]->IRBuildExp();
-        break;
-    case "compoundStmt":
-        this->childPtr[0]->IRBuildCompoundStmt();
-        break;
-    case "selectStmt":
-        this->childPtr[0]->IRBuildSelect();
-        break;
-    case "iterStmt":
-        this->childPtr[0]->IRBuildIter();
-        break;
-    case "retStmt":
-        this->childPtr[0]->IRBuildRet();
-        break;
-    default:
+        return this->childPtr[0]->IRBuildExp();
+    }
+    else if (this->childPtr[0]->nodeValue->compare("compoundStmt") == 0)
+    {
+        return this->childPtr[0]->IRBuildCompoundStmt();
+    }
+    else if (this->childPtr[0]->nodeValue->compare("selecStmt") == 0)
+    {
+        return this->childPtr[0]->IRBuildSelec();
+    }
+    else if (this->childPtr[0]->nodeValue->compare("iterStmt") == 0)
+    {
+        return this->childPtr[0]->IRBuildIter();
+    }
+    else if (this->childPtr[0]->nodeValue->compare("retStmt") == 0)
+    {
+        return this->childPtr[0]->IRBuildRet();
+    }
+    else
+    {
         throw("No Fit Stmt\n");
-        break;
     }
 }
 
@@ -541,6 +544,103 @@ llvm::Value* astNode::IRBuildExp()
 {
 }
 
-llvm::Value* astNode::IRBuildSelect() {}
-llvm::Value* astNode::IRBuildIter() {}
-llvm::Value* astNode::IRBuildRet() {}
+/**
+ * @description: if相关语句IR生成
+ * @param {*}
+ * @return {*}
+ * selecStmt → IF LPT exp RPT stmt %prec LOWER_THAN_ELSE | IF LPT exp RPT stmt ELSE stmt
+ */
+llvm::Value* astNode::IRBuildSelec()
+{
+    llvm::Value* condV            = this->childPtr[2]->IRBuildExp();
+    condV                         = Builder.CreateFCmpONE(condV, llvm::ConstantFP::get(LLVMContext, llvm::APFloat(0.0)), "ifCond");
+    llvm::Function*   theFunction = Builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock* thenBB      = llvm::BasicBlock::Create(LLVMContext, "then", theFunction);   // 自动加到函数中
+    llvm::BasicBlock* elseBB      = llvm::BasicBlock::Create(LLVMContext, "else");
+    llvm::BasicBlock* mergeBB     = llvm::BasicBlock::Create(LLVMContext, "ifcont");
+    llvm::BranchInst* select      = Builder.CreateCondBr(condV, thenBB, elseBB);   // 插入条件分支语句的指令
+
+    // Then语句处理
+    Builder.SetInsertPoint(thenBB);
+    llvm::Value* thenV = this->childPtr[4]->IRBuildStmt();
+    Builder.CreateBr(mergeBB);           // 插入跳转到Merge分支的指令
+    thenBB = Builder.GetInsertBlock();   // 获取Then语句的出口
+
+    // Else语句处理
+    theFunction->getBasicBlockList().push_back(elseBB);   // 添加到函数中去
+    Builder.SetInsertPoint(elseBB);
+    llvm::Value* elseV = nullptr;
+    // selecStmt → IF LPT exp RPT stmt ELSE stmt
+    if (this->childNum == 7)
+    {
+        elseV = this->childPtr[6]->IRBuildStmt();
+    }
+    Builder.CreateBr(mergeBB);           // 插入跳转到Merge分支的指令
+    elseBB = Builder.GetInsertBlock();   // 获取Else语句的出口
+
+    theFunction->getBasicBlockList().push_back(mergeBB);
+    Builder.SetInsertPoint(mergeBB);
+
+    return select;
+}
+
+/**
+ * @description: while相关语句生成
+ * @param {*}
+ * @return {*}
+ * iterStmt → WHILE LPT exp RPT stmt
+ */
+llvm::Value* astNode::IRBuildIter()
+{
+    llvm::Function*   theFunction = Builder.GetInsertBlock()->getParent();
+    llvm::BasicBlock* condBB      = llvm::BasicBlock::Create(LLVMContext, "cond", theFunction);
+    llvm::BasicBlock* bodyBB      = llvm::BasicBlock::Create(LLVMContext, "body", theFunction);
+    llvm::BasicBlock* endBB       = llvm::BasicBlock::Create(LLVMContext, "end", theFunction);
+    Builder.CreateBr(condBB);   // 跳转到条件分支
+
+    // condBB基本块
+    Builder.SetInsertPoint(condBB);
+    llvm::Value* condV       = this->childPtr[2]->IRBuildExp();
+    condV                    = Builder.CreateFCmpONE(condV, llvm::ConstantFP::get(LLVMContext, llvm::APFloat(0.0)), "whileCond");
+    llvm::BranchInst* select = Builder.CreateCondBr(condV, bodyBB, endBB);   // 插入分支语句的指令
+    condBB                   = Builder.GetInsertBlock();                     // 获取条件语句的出口
+
+    // bodyBB基本块
+    Builder.SetInsertPoint(bodyBB);
+    llvm::Value* bodyV = this->childPtr[4]->IRBuildStmt();
+    Builder.CreateBr(condBB);   // 跳转到condBB
+
+    // endBB基本块
+    Builder.SetInsertPoint(endBB);
+
+    return select;
+}
+
+/**
+ * @description: return & break 语句相关IR生成
+ * @param {*}
+ * @return {*}
+ * retStmt → RETURN exp SEMICOLON | RETURN SEMICOLON | BREAK SEMICOLON
+ */
+llvm::Value* astNode::IRBuildRet()
+{
+    // retStmt → RETURN exp SEMICOLON
+    if (this->childNum == 3)
+    {
+        llvm::Value* ret = this->childPtr[1]->IRBuildExp();
+        return Builder.CreateRet(ret);
+    }
+    // retStmt → RETURN SEMICOLON
+    else if (this->childPtr[0]->nodeValue->compare("RETURN") == 0)
+    {
+        return Builder.CreateRetVoid();
+    }
+    // retStmt → BREAK SEMICOLON
+    else if (this->childPtr[0]->nodeValue->compare("BREAK") == 0)
+    {
+    }
+    else
+    {
+        throw("RET ERROR\n");
+    }
+}
