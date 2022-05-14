@@ -1,0 +1,30 @@
+program → decList
+decList → dec decList | %empty
+dec → varDeclaration | funcDeclaration
+
+varDeclaration → typeSpecifier varDecList SEMICOLON
+typeSpecifier → TYPE
+varDecList → varDef | varDef COMMA varDecList 🍺
+varDef → ID | ID LSB INT RSB 🍺
+
+funcDeclaration → typeSpecifier funcDec compoundStmt
+funcDec → ID LPT paramList RPT | ID LPT RPT
+paramList → paramDec COMMA paramList | paramDec 🍺
+paramDec → typeSpecifier paramDef 🍺
+paramDef → ID | ID LSB INT RSB | ID LSB RSB 🍺
+compoundStmt → LCB content RCB
+content → localDec stmtList | %empty
+localDec → varDeclaration localDec | %empty
+stmtList → stmt stmtList | %empty
+stmt → expStmt | compoundStmt | selecStmt | iterStmt | retStmt
+selecStmt → IF LPT exp RPT stmt | IF LPT exp RPT stmt ELSE stmt
+iterStmt → WHILE LPT exp RPT stmt
+retStmt → RETURN exp SEMICOLON | RETURN SEMICOLON | BREAK SEMICOLON
+expStmt → exp SEMICOLON | SEMICOLON
+exp → exp dbOper exp | sgOper exp | LPT exp RPT | ID Array | ID funcCall | sgFactor
+dbOper → PLUS | MINUS | MULTI | DIV | MOD | RELOP | ASSIGN | AND | OR
+sgOper → MINUS | NOT | PLUS
+Array → LSB exp RSB | LSB RSB
+funcCall → LPT argList RPT | LPT RPT
+argList → exp COMMA argList | exp 🍺
+sgFactor → ID | INT | FLOAT | CHAR | BOOLEAN | STR
