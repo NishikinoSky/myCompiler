@@ -25,10 +25,14 @@ public:
     std::vector<std::pair<llvm::Type*, std::string>>* getParamList();
     std::vector<llvm::Value*>*                        getArgList();
     llvm::Value*                                      IRBuilder();
-    llvm::Value*                                      IRBuildVar();
+    llvm::Value*                                      IRBuildVar(bool ifGlobalVar);
     llvm::Value*                                      IRBuildFunc();
     llvm::Value*                                      IRBuildCompoundStmt();
+    llvm::Value*                                      IRBuildStmt();
     llvm::Value*                                      IRBuildExp();
+    llvm::Value*                                      IRBuildSelect();
+    llvm::Value*                                      IRBuildIter();
+    llvm::Value*                                      IRBuildRet();
 };
 
 /**
@@ -324,7 +328,7 @@ llvm::Value* astNode::IRBuilder()
     {
         if (this->childPtr[0]->nodeValue->compare("varDeclaration"))
         {
-            return this->IRBuildVar();
+            return this->IRBuildVar(1);
         }
         else if (this->childPtr[0]->nodeValue->compare("funcDeclaration"))
         {
@@ -347,13 +351,14 @@ llvm::Value* astNode::IRBuilder()
  * varDecList → varDef | varDef COMMA varDecList
  * varDef → ID | ID LSB INT RSB
  */
-llvm::Value* astNode::IRBuildVar()
+llvm::Value* astNode::IRBuildVar(bool ifGlobalVar)
 {
     std::vector<std::pair<int, std::string>>*          varList = getVarList();
     std::vector<std::pair<int, std::string>>::iterator it;
     for (it = varList->begin(); it != varList->end(); it++)
     {
         llvm::Type* llvmType;
+        int         arraySize = 0;
         if (it->first == VAR)
         {
             llvmType = getLLVMType(getNodeType(this->childPtr[0]), 0);
@@ -361,20 +366,51 @@ llvm::Value* astNode::IRBuildVar()
         // array
         else
         {
-            llvmType = getLLVMType(getNodeType(this->childPtr[0]) + ARRAY, it->first - ARRAY);
+            arraySize = it->first - ARRAY;
+            llvmType  = getLLVMType(getNodeType(this->childPtr[0]) + ARRAY, arraySize);
         }
 
         // 全局变量
-        if (1)
+        if (ifGlobalVar)
         {
-            llvm::GlobalVariable* gVarPtr = new llvm::GlobalVariable(/*Module=*/*gModule,
-                                                                     /*Type=*/llvmType,
-                                                                     /*isConstant=*/false,
-                                                                     /*Linkage=*/llvm::GlobalValue::CommonLinkage,
-                                                                     /*Initializer=*/0,   // has initializer, specified below
-                                                                     /*Name=*/it->second);
+            // 全局数组
+            if (llvmType->isArrayTy())
+            {
+                llvm::GlobalVariable*        gArrayPtr = new llvm::GlobalVariable(/*Module=*/*gModule,
+                                                                           /*Type=*/llvmType,
+                                                                           /*isConstant=*/true,
+                                                                           /*Linkage=*/llvm::GlobalValue::PrivateLinkage,
+                                                                           /*Initializer=*/0,   // has initializer, specified below
+                                                                           /*Name=*/it->second);
+                std::vector<llvm::Constant*> constArrayElems;
+                llvm::Constant*              con = llvm::ConstantInt::get(getLLVMType(getNodeType(this->childPtr[0]), 0), 0);   // 数组单个元素的类型，并且元素初始化为0
+                for (int i = 0; i < arraySize; i++)
+                {
+                    constArrayElems.push_back(con);
+                }
+                llvm::ArrayType* arrayType  = llvm::ArrayType::get(getLLVMType(getNodeType(this->childPtr[0]), 0), arraySize);
+                llvm::Constant*  constArray = llvm::ConstantArray::get(arrayType, constArrayElems);   //数组常量
+                gArrayPtr->setInitializer(constArray);                                                //将数组常量初始化给全局常量
+            }
+            // 非数组
+            else
+            {
+                llvm::GlobalVariable* gVarPtr = new llvm::GlobalVariable(/*Module=*/*gModule,
+                                                                         /*Type=*/llvmType,
+                                                                         /*isConstant=*/false,
+                                                                         /*Linkage=*/llvm::GlobalValue::PrivateLinkage,
+                                                                         /*Initializer=*/0,   // has initializer, specified below
+                                                                         /*Name=*/it->second);
+                llvm::Constant*       con     = llvm::ConstantInt::get(llvmType, 0);
+                gVarPtr->setInitializer(con);   //对全局变量初始化，按照ir的语法是必须要初始化的
+            }
+        }
+        // 局部变量
+        else
+        {
         }
     }
+    return 0;
 }
 
 /**
@@ -444,6 +480,24 @@ llvm::Value* astNode::IRBuildCompoundStmt()
 {
     if (this->nodeValue->compare("compoundStmt") == 0)
     {
+        // content → localDec stmtList
+        if (this->childPtr[1]->childNum == 2)
+        {
+            // localDec → varDeclaration localDec
+            astNode* localDec = this->childPtr[1]->childPtr[0];
+            while (localDec->childNum == 2)
+            {
+                localDec->childPtr[0]->IRBuildVar(0);
+                localDec = localDec->childPtr[1];
+            }
+            // stmtList → stmt stmtList
+            astNode* stmtList = this->childPtr[1]->childPtr[1];
+            while (stmtList->childNum == 2)
+            {
+                stmtList->childPtr[0]->IRBuildStmt();
+                stmtList = stmtList->childPtr[1];
+            }
+        }
     }
     else
     {
@@ -452,6 +506,41 @@ llvm::Value* astNode::IRBuildCompoundStmt()
     return 0;
 }
 
+/**
+ * @description: 生成stmt相关IR, 负责调用各种类型的语句的IR生成
+ * @param {*}
+ * @return {*}
+ * stmt → expStmt | compoundStmt | selecStmt | iterStmt | retStmt
+ */
+llvm::Value* astNode::IRBuildStmt()
+{
+    switch (this->childPtr[0]->nodeValue)
+    {
+    case "expStmt":
+        this->childPtr[0]->IRBuildExp();
+        break;
+    case "compoundStmt":
+        this->childPtr[0]->IRBuildCompoundStmt();
+        break;
+    case "selectStmt":
+        this->childPtr[0]->IRBuildSelect();
+        break;
+    case "iterStmt":
+        this->childPtr[0]->IRBuildIter();
+        break;
+    case "retStmt":
+        this->childPtr[0]->IRBuildRet();
+        break;
+    default:
+        throw("No Fit Stmt\n");
+        break;
+    }
+}
+
 llvm::Value* astNode::IRBuildExp()
 {
 }
+
+llvm::Value* astNode::IRBuildSelect() {}
+llvm::Value* astNode::IRBuildIter() {}
+llvm::Value* astNode::IRBuildRet() {}
