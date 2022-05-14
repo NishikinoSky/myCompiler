@@ -45,13 +45,15 @@ myCompiler
 
 [Lex&Yacc 联合原理](https://zhuanlan.zhihu.com/p/143867739)
 
+[yacc中避免if和if else冲突](https://stackoverflow.com/questions/1737460/how-to-find-shift-reduce-conflict-in-this-yacc-file)
+
 [可变参数函数](https://songlee24.github.io/2014/07/22/cpp-changeable-parameter/)
 
 [LLVM官方文档](https://llvm.org/doxygen/namespacellvm.html)
 
 [LLVM教程](https://llvm-tutorial-cn.readthedocs.io/en/latest/chapter-1.html)
 
-[LLVM IR相关语法与接口](https://blog.csdn.net/qq_42570601/category_10200372.html)
+[LLVM IR相关语法与接口 ⚠️重要参考](https://blog.csdn.net/qq_42570601/category_10200372.html)
 
 [LLVM编译器架构](https://blog.csdn.net/xfxyy_sxfancy/category_9264747.html?spm=1001.2014.3001.5482)
 
@@ -60,6 +62,8 @@ myCompiler
 [LLVM中文](https://llvm.liuxfe.com/tutorial/langimpl/)
 
 [IRBuilderBase API](https://llvm.org/doxygen/classllvm_1_1IRBuilderBase.html#a06d64f226fabd94d694d6abd82e3c7b3)
+
+[LLVM IR 分支codeGen ⚠️有用](https://tin.js.org/2020/07/09/llvm-1/)
 
 **规范：**
 
@@ -96,12 +100,12 @@ funcDec → ID LPT paramList RPT | ID LPT RPT 🍺
 paramList → paramDec COMMA paramList | paramDec 🍺
 paramDec → typeSpecifier paramDef 🍺
 paramDef → ID | ID LSB RSB 🍺
-compoundStmt → LCB content RCB
-content → localDec stmtList | %empty
-localDec → varDeclaration localDec | %empty
-stmtList → stmt stmtList | %empty
-stmt → expStmt | compoundStmt | selecStmt | iterStmt | retStmt
-selecStmt → IF LPT exp RPT stmt | IF LPT exp RPT stmt ELSE stmt
+compoundStmt → LCB content RCB 🍺
+content → localDec stmtList | %empty 🍺
+localDec → varDeclaration localDec | %empty 🍺
+stmtList → stmt stmtList | %empty 🍺
+stmt → expStmt | compoundStmt | selecStmt | iterStmt | retStmt 🍺
+selecStmt → IF LPT exp RPT stmt %prec LOWER_THAN_ELSE | IF LPT exp RPT stmt ELSE stmt 🍺
 iterStmt → WHILE LPT exp RPT stmt
 retStmt → RETURN exp SEMICOLON | RETURN SEMICOLON | BREAK SEMICOLON
 expStmt → exp SEMICOLON | SEMICOLON
@@ -164,41 +168,6 @@ llvm::IRBuilder<> gIRBuilder(gLLVMContext);
 
 #### 5.2 符号表
 
-**⚠️如何判断全局变量与局部变量？---------------------待写**
-
-##### 5.2.1 全局变量
-
-[How to create GlobalVar - Stackoverflow](https://stackoverflow.com/questions/7787308/how-can-i-declare-a-global-variable-in-llvm)
-
-```c++
-// reference 1
-// 将全局变量插入全局变量表 
-// This creates a global and inserts it before the specified other global.
-llvm::GlobalVariable::GlobalVariable(module, type, isConstant, linkage, initializer, name, nullptr, NotThreadLocal, false)
- 
-// reference 2
-// Global Variable Declarations
-GlobalVariable* gvar_ptr_abc = new GlobalVariable(/*Module=*/*mod, 
-        /*Type=*/PointerTy_0,
-        /*isConstant=*/false,
-        /*Linkage=*/GlobalValue::CommonLinkage,
-        /*Initializer=*/0, // has initializer, specified below
-        /*Name=*/"abc");
-gvar_ptr_abc->setAlignment(4);
-// Constant Definitions
-ConstantPointerNull* const_ptr_2 = ConstantPointerNull::get(PointerTy_0);
-// Global Variable Definitions
-gvar_ptr_abc->setInitializer(const_ptr_2);
-```
-
-**⚠️另外需要判断全局变量是否重复定义------------------待写**
-
-` llvm::getGlobalVariable(name) `在全局变量表中查找全局变量
-
-##### 5.2.2 局部变量
-
-插入对应函数的符号表
-
 #### 5.3 类型处理 🍺
 
 `def.h`中宏定义类型
@@ -243,8 +212,6 @@ ArrayType* array_type = ArrayType::get(Type::getInt32Ty(context), 4);
 
 `CreateCast`
 
-
-
 #### 5.5 变量处理
 
 类型 变量名
@@ -252,6 +219,66 @@ ArrayType* array_type = ArrayType::get(Type::getInt32Ty(context), 4);
 `varList`保存变量名和类型（var or array，arraysize=0则为ptr）
 
 判断是否为全局变量，插入符号表。
+
+**⚠️如何判断全局变量与局部变量？---------------------待写**
+
+暂且用一个flag `isGobalVar` 表示，有上层调用者传入
+
+##### 5.5.1 全局变量
+
+[How to create GlobalVar - Stackoverflow](https://stackoverflow.com/questions/7787308/how-can-i-declare-a-global-variable-in-llvm)
+
+[重要参考](https://blog.csdn.net/qq_42570601/article/details/108007986)
+
+```c++
+// reference 1
+// 将全局变量插入全局变量表 
+// This creates a global and inserts it before the specified other global.
+llvm::GlobalVariable::GlobalVariable(module, type, isConstant, linkage, initializer, name, nullptr, NotThreadLocal, false)
+ 
+// reference 2
+// Global Variable Declarations
+GlobalVariable* gvar_ptr_abc = new GlobalVariable(/*Module=*/*mod, 
+        /*Type=*/PointerTy_0,
+        /*isConstant=*/false,
+        /*Linkage=*/GlobalValue::CommonLinkage,
+        /*Initializer=*/0, // has initializer, specified below
+        /*Name=*/"abc");
+gvar_ptr_abc->setAlignment(4);
+// Constant Definitions
+ConstantPointerNull* const_ptr_2 = ConstantPointerNull::get(PointerTy_0);
+// Global Variable Definitions
+gvar_ptr_abc->setInitializer(const_ptr_2);
+
+// 全局变量数组
+//定义一个int类型的全局数组常量
+
+	llvm::ArrayType* array_type = llvm::ArrayType::get(llvm::Type::getInt32Ty(context), 4);
+	llvm::GlobalVariable* array_global = new llvm::GlobalVariable(/*Module=*/*module,
+		/*Type=*/array_type,
+		/*isConstant=*/true,
+		/*Linkage=*/llvm::GlobalValue::PrivateLinkage,
+		/*Initializer=*/0, // has initializer, specified below
+		/*Name=*/"array_global");
+	array_global->setAlignment(16);
+	std::vector<llvm::Constant*> const_array_elems;
+	const_array_elems.push_back(con_1);
+	const_array_elems.push_back(con_2);
+	const_array_elems.push_back(con_3);
+	const_array_elems.push_back(con_4);
+	llvm::Constant* const_array = llvm::ConstantArray::get(array_type, const_array_elems);//数组常量
+	array_global->setInitializer(const_array);//将数组常量初始化给全局常量
+```
+
+**⚠️另外需要判断全局变量是否重复定义------------------待写**
+
+` llvm::getGlobalVariable(name) `在全局变量表中查找全局变量
+
+##### 5.5.2 局部变量
+
+**⚠️局部变量部分如何写---------------------------待写**
+
+插入对应函数的符号表
 
 #### 5.6 函数处理
 
@@ -270,12 +297,143 @@ llvm::BasicBlock* entry = llvm::BasicBlock::Create(LLVMContext, "entry", func);
 Builder.SetInsertPoint(entry);
 ```
 
-
-
 #### 5.7 分支&循环
 
-[分支&循环](https://blog.csdn.net/qq_42570601/article/details/107771289)
+[分支&循环参考](https://blog.csdn.net/qq_42570601/article/details/107771289)
 
 ##### 5.7.1 if else
 
+```cpp
+llvm::IRBuilderBase::CreateCondBr(Cond, True, False);
+```
+
+[分支参考](https://tin.js.org/2020/07/09/llvm-1/)
+
+```c++
+// If语句
+if 1 < 2 
+   3
+else f(1, 2, 3);
+
+Value *CondV = Cond->codegen();
+CondV = Builder.CreateFCmpONE(CondV, ConstantFP::get(TheContext, APFloat(0.0)), "ifcond");
+Function *TheFunction = Builder.GetInsertBlock()->getParent();
+BasicBlock *ThenBB = BasicBlock::Create(TheContext, "then", TheFunction); // 自动加到函数中
+BasicBlock *ElseBB = BasicBlock::Create(TheContext, "else");
+BasicBlock *MergeBB = BasicBlock::Create(TheContext, "ifcont");
+
+Builder.CreateCondBr(CondV, ThenBB, ElseBB); // 插入条件分支语句的指令
+
+// Then语句处理
+Builder.SetInsertPoint(ThenBB);
+Value *ThenV = Then->codegen();
+Builder.CreateBr(MergeBB); // 插入跳转到Merge分支的指令
+ThenBB = Builder.GetInsertBlock(); // 获取Then语句的出口
+
+// Else语句处理
+TheFunction->getBasicBlockList().push_back(ElseBB); // 添加到函数中去
+Builder.SetInsertPoint(ElseBB);
+Value *ElseV = Else->codegen();
+Builder.CreateBr(MergeBB); // 插入跳转到Merge分支的指令
+ElseBB = Builder.GetInsertBlock(); // 获取Else语句的出口
+
+// PHI指令的生成
+TheFunction->getBasicBlockList().push_back(MergeBB);
+Builder.SetInsertPoint(MergeBB);
+PHINode *PN = Builder.CreatePHI(Type::getDoubleTy(TheContext), 2, "iftmp");
+PN->addIncoming(ThenV, ThenBB);
+PN->addIncoming(ElseV, ElseBB);
+```
+
+##### 5.7.2 while
+
+```cpp
+while(i <= n){
+		sum = sum + i;
+		i++;
+	}
+
+//创建循环使用到的三个代码块
+	BasicBlock *while_count = BasicBlock::Create(context, "while_count", sum_fun);
+	BasicBlock *while_body = BasicBlock::Create(context, "while_body", sum_fun);
+	BasicBlock *while_end = BasicBlock::Create(context, "while_end", sum_fun);
+	
+	//给变量i和sum申请内存,并放入初值0
+	Value* i_alloca = builder.CreateAlloca(Type::getInt32Ty(context));
+	Value* sum_alloca = builder.CreateAlloca(Type::getInt32Ty(context));
+	builder.CreateStore(con_0, i_alloca);
+	builder.CreateStore(con_0, sum_alloca);
+	builder.CreateBr(while_count);
+	
+	//while_count基本块
+	builder.SetInsertPoint(while_count);
+	Value* i_load = builder.CreateLoad(Type::getInt32Ty(context), i_alloca);
+	Value *cmp_value = builder.CreateICmpSLE(i_load, arg_n);
+	//根据cmp的值跳转，也就是if条件
+	builder.CreateCondBr(cmp_value, while_body, while_end);
+	
+//while_body基本块
+	builder.SetInsertPoint(while_body);
+	//sum = sum + i;
+	Value* sum_load = builder.CreateLoad(Type::getInt32Ty(context), sum_alloca);
+	Value* temp_sum = builder.CreateAdd(sum_load, i_load);
+	builder.CreateStore(temp_sum, sum_alloca);
+	//i++;
+	Value* temp_i = builder.CreateAdd(i_load, con_1);
+	builder.CreateStore(temp_i, i_alloca);
+	builder.CreateBr(while_count);
+	
+	//while_end基本块
+	builder.SetInsertPoint(while_end);
+```
+
+```c++
+for i = 0, i < 100, 1.00 in
+  f(1, 2, i);
+
+Value *StartVal = Start->codegen();
+Function *TheFunction = Builder.GetInsertBlock()->getParent();
+BasicBlock *PreheaderBB = Builder.GetInsertBlock();
+BasicBlock *LoopBB = BasicBlock::Create(TheContext, "loop", TheFunction);
+Builder.CreateBr(LoopBB); // 跳转到Loop分支
+
+Builder.SetInsertPoint(LoopBB);
+// 创建PHI节点
+PHINode *Variable = Builder.CreatePHI(Type::getDoubleTy(TheContext), 2, VarName.c_str());
+Variable->addIncoming(StartVal, PreheaderBB);
+NamedValues[VarName] = Variable; // 将for定义的变量添加到作用域中
+Body->codegen();
+Value *StepVal = Step->codegen();
+Value *NextVar = Builder.CreateFAdd(Variable, StepVal, "nextvar");
+Value *EndCond = End->codegen();
+EndCond = Builder.CreateFCmpONE(EndCond, ConstantFP::get(TheContext, APFloat(0.0)), "loopcond");
+BasicBlock *LoopEndBB = Builder.GetInsertBlock(); // 为啥不可以直接使用LoopBB，而是还要获取一次呢？
+BasicBlock *AfterBB = BasicBlock::Create(TheContext, "afterloop", TheFunction);
+Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
+
+Builder.SetInsertPoint(AfterBB);
+Variable->addIncoming(NextVar, LoopEndBB);
+```
+
+**break如何实现？------------------待写**
+
 #### 5.8 表达式
+
+#### 5.9 返回语句
+
+##### 5.9.1 return exp;
+
+```c++
+Value* ret = builder.CreateFPToSI(ret_pow, Type::getInt32Ty(context));
+return builder.CreateRet(ret);
+```
+
+##### 5.9.2 return;
+
+```c++
+return Builder.CreateRetVoid();
+```
+
+##### 5.9.3 break;
+
+**⚠️-----------------------待写**
