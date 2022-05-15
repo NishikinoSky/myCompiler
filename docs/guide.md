@@ -65,6 +65,14 @@ myCompiler
 
 [LLVM IR 分支codeGen ⚠️有用](https://tin.js.org/2020/07/09/llvm-1/)
 
+[LLVMIR exp生成](https://hlli.xyz/index.php/archives/15/)
+
+[LLVM IR 局部变量生成](https://blog.csdn.net/mrpre/article/details/106902346)
+
+[GetElementPtr GEP](http://llvm.org/docs/GetElementPtr.html#introduction)
+
+[创建 使用数组 GEP](https://www.twblogs.net/a/5e4fb5efbd9eee101df85956)
+
 **规范：**
 
 变量定义采用小驼峰
@@ -77,7 +85,7 @@ myCompiler
 
 ### 4. 语法分析模块
 
-#### a. cmm.y
+#### 4.1 cmm.y
 
 **定义的BNF语法**
 
@@ -106,19 +114,19 @@ localDec → varDeclaration localDec | %empty 🍺
 stmtList → stmt stmtList | %empty 🍺
 stmt → expStmt | compoundStmt | selecStmt | iterStmt | retStmt 🍺
 selecStmt → IF LPT exp RPT stmt %prec LOWER_THAN_ELSE | IF LPT exp RPT stmt ELSE stmt 🍺
-iterStmt → WHILE LPT exp RPT stmt
-retStmt → RETURN exp SEMICOLON | RETURN SEMICOLON | BREAK SEMICOLON
+iterStmt → WHILE LPT exp RPT stmt 🍺
+retStmt → RETURN exp SEMICOLON | RETURN SEMICOLON | BREAK SEMICOLON 🍺
 expStmt → exp SEMICOLON | SEMICOLON
-exp → exp dbOper exp | sgOper exp | LPT exp RPT | ID Array | ID funcCall | sgFactor
+exp → exp dbOper exp | sgOper exp | LPT exp RPT | ID | ID Array | ID funcCall | sgFactor
 dbOper → PLUS | MINUS | MULTI | DIV | MOD | RELOP | ASSIGN | AND | OR
 sgOper → MINUS | NOT | PLUS
 Array → LSB exp RSB | LSB RSB
 funcCall → LPT argList RPT | LPT RPT
 argList → exp COMMA argList | exp
-sgFactor → ID | INT | FLOAT | CHAR | BOOLEAN | STR
+sgFactor → INT | FLOAT | CHAR | BOOL | STR
 ```
 
-#### b. AST
+#### 4.2 AST
 
 可以有两种设计：
 
@@ -149,7 +157,7 @@ public:
 
 ### 5. 语义分析模块 IR
 
-#### 5.0 LLVM
+ LLVM
 
 ```yacas
 Source Code -> | Frontend | Optimizer | Backend | -> Machine Code
@@ -157,7 +165,7 @@ Source Code -> | Frontend | Optimizer | Backend | -> Machine Code
 
 LLVM的一大特色就是有着独立的、完善的、严格约束的中间代码表示。这种中间代码，就是LLVM的字节码前端生成这种中间代码，后端自动进行各类优化分析。
 
-#### 5.1 运行时环境
+#### 5.1 runtime
 
 ```cpp
 // 记录了LLVM的核心数据结构，比如类型和常量表，不过不太需要关心它的内部
@@ -222,7 +230,9 @@ ArrayType* array_type = ArrayType::get(Type::getInt32Ty(context), 4);
 
 **⚠️如何判断全局变量与局部变量？---------------------待写**
 
-暂且用一个flag `isGobalVar` 表示，有上层调用者传入
+🍺 暂且用一个flag `isGobalVar` 表示，由上层调用者传入 (✖️)
+
+🍺 传入当前函数指针 `llvm::Function* func`，全局变量该指针为`nullptr`
 
 ##### 5.5.1 全局变量
 
@@ -274,11 +284,32 @@ gvar_ptr_abc->setInitializer(const_ptr_2);
 
 ` llvm::getGlobalVariable(name) `在全局变量表中查找全局变量
 
+```c++
+if (gModule->getGlobalVariable(it->second, true) != NULL)
+            {
+                throw("GlobalVar Name Duplicated.\n");
+            }
+```
+
 ##### 5.5.2 局部变量
 
 **⚠️局部变量部分如何写---------------------------待写**
 
 插入对应函数的符号表
+
+编写一个函数 CreateEntryBlockAlloca，简化后续工作，其功能是往函数的 EntryBlock 的最开始的地方添加分配内存指令：
+
+```c++
+llvm::AllocaInst* CreateEntryBlockAlloca(llvm::Function* func,
+                                         const std::string&amp; var_name) {
+  llvm::IRBuilder<> ir_builder(&amp;(func->getEntryBlock()),
+                               func->getEntryBlock().begin());
+  return ir_builder.CreateAlloca(llvm::Type::getDoubleTy(g_llvm_context), 0,
+                                 var_name.c_str());
+}
+```
+
+
 
 #### 5.6 函数处理
 
@@ -415,9 +446,99 @@ Builder.SetInsertPoint(AfterBB);
 Variable->addIncoming(NextVar, LoopEndBB);
 ```
 
-**break如何实现？------------------待写**
-
 #### 5.8 表达式
+
+##### 5.8.1 常量 sgFactor
+
+###### 5.8.1.1 Float get
+
+LLVM IR 中, numeric constants 使用 `ConstantFP` 类进行表示, 它在内部将数值 hold 在 `APFloat` 中 (`APFloat` 有能力 hold 任意精度的浮点数常量)。这段代码基本上创建并返回一个 `ConstantFP`。注意在LLVM IR 中 constants 是独特且共享的。因为这个理由, API 使用 “foo::get(…)” 写法而非 “new foo(..)” 或者 “foo::Create(..)”.
+
+```c++
+	982	Constant *ConstantFP::get(Type *Ty, const APFloat &V) {
+  983   ConstantFP *C = get(Ty->getContext(), V);
+  984   assert(C->getType() == Ty->getScalarType() &&
+  985          "ConstantFP type doesn't match the type implied by its value!");
+  986  
+  987   // For vectors, broadcast the value.
+  988   if (auto *VTy = dyn_cast<VectorType>(Ty))
+  989     return ConstantVector::getSplat(VTy->getElementCount(), C);
+  990  
+  991   return C;
+  992 }
+```
+
+###### 5.8.1.2 字符串
+
+[参考](https://blog.csdn.net/qq_42570601/article/details/108007986)
+
+字符串常量用ConstantDataArray类的getString方法来定义。ConstantDataArray是一个常量数组（即里面存放的元素时常量），元素类型可以是1/2/4/8-byte的整型常量或float/double常量。字符串是由字符（char）数组构成，字符（char）在ir中对应的类型是i8，所以可以以此来构建字符串常量。
+
+```c++
+//创建字符串常量
+	llvm::Constant *strConst1 = llvm::ConstantDataArray::getString(context,
+			"exception_name");
+	llvm::Value *globalVar1 = new llvm::GlobalVariable(*module,
+			strConst1->getType(), true, llvm::GlobalValue::PrivateLinkage,
+			strConst1, "globalVar1");
+	llvm::Constant *strConst2 = llvm::ConstantDataArray::getString(context,
+			"uuid");
+	llvm::Value *globalVar2 = new llvm::GlobalVariable(*module,
+			strConst2->getType(), true, llvm::GlobalValue::PrivateLinkage,
+			strConst2, "globalVar2");
+
+llvm::SmallVector<llvm::Value*, 2> indexVector;
+llvm::Value *const_0 = llvm::ConstantInt::get(
+			llvm::IntegerType::getInt32Ty(context), 0);
+indexVector.push_back(const_0);
+	indexVector.push_back(const_0);
+	llvm::Value *number_ptr_1 = builder.CreateGEP(alloca_Struct, indexVector);
+```
+
+一维数组
+
+假设有数组 int a[10] = {0}，现需要访问下标为3的元素值（即a[3]），使用IRBuilder.CreateInBoundsGEP()方法，则代码如下：
+
+```cpp
+// argVarArr contains the array a[10]'s pointer
+Value* arrVal = Builder.CreateAlignedLoad(argVarArr, 8);
+// index value
+Constant* three = llvm::ConstantInt::get(M.getContext(), llvm::APInt(32, 3, true));
+// set the element's type: i32
+Types* eleTy = llvm::Type::getInt32Ty(M.getContext());
+// get the element a[3]'s pointer
+// [ %arrayidx = getelementptr inbounds i32, i32* %a, i32 3 ]
+Value* elePtr = Builder.CreateInBoundsGEP(eleTy, arrVal, three);
+// get the element a[3]'s value
+// [ %4 = load i32, i32* %arrayidx, align 4 ]
+Value* eleVal = Builder.CreateAlignedLoad(elePtr, 4);
+```
+
+使用IRBuilder.CreateGEP()方法则稍微麻烦，需要准备两个索引值，内存地址偏移量的起始仍然是数组指针变量（arrVal）所指向位置，第一个索引值为0，这个偏移量令下一个索引值的起始位置以 arrVal + 0 开始.[链接](http://llvm.org/docs/GetElementPtr.html#introduction)
+
+##### 5.8.2 函数调用
+
+```c++
+Value *CallExprAST::Codegen() {
+  // Look up the name in the global module table.
+  Function *CalleeF = TheModule->getFunction(Callee);
+  if (CalleeF == 0)
+    return ErrorV("Unknown function referenced");
+
+  // If argument mismatch error.
+  if (CalleeF->arg_size() != Args.size())
+    return ErrorV("Incorrect # arguments passed");
+
+  std::vector<Value*> ArgsV;
+  for (unsigned i = 0, e = Args.size(); i != e; ++i) {
+    ArgsV.push_back(Args[i]->Codegen());
+    if (ArgsV.back() == 0) return 0;
+  }
+  return Builder.CreateCall(CalleeF, ArgsV, "calltmp");
+}
+```
+
+
 
 #### 5.9 返回语句
 
@@ -437,3 +558,5 @@ return Builder.CreateRetVoid();
 ##### 5.9.3 break;
 
 **⚠️-----------------------待写**
+
+🍺 暂且让break返回一个nullptr，在whileblock中判断循环体到返回值
