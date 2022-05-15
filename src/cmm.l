@@ -34,11 +34,9 @@ PLUS \+
 MINUS \-
 MULTI \*
 DIV \/
-MOD \%
 RELOP \<|\<\=|\>|\>\=|\=\=|\!\=
 ASSIGN \=
-AND \&\&
-OR \|\|
+LOGIC \&\& | \|\|
 NOT \!
 LPT \(
 RPT \)
@@ -75,11 +73,9 @@ COMMENT \/\/[^\n]*|"/*"([^\*]|(\*)*[^\*/])*(\*)*"*/"
 {MINUS} {yylval.asTree = new astNode(yytext, "MINUS", 0); return MINUS;}
 {MULTI} {yylval.asTree = new astNode(yytext, "MULTI", 0); return MULTI;}
 {DIV}   {yylval.asTree = new astNode(yytext, "DIV", 0); return DIV;}
-{MOD}   {yylval.asTree = new astNode(yytext, "MOD", 0); return MOD;}
 {RELOP}  {yylval.asTree = new astNode(yytext, "RELOP", 0); return RELOP;}
 {ASSIGN}    {yylval.asTree = new astNode(yytext, "ASSIGN", 0); return ASSIGN;}
-{AND}   {yylval.asTree = new astNode(yytext, "AND", 0); return AND;}
-{OR}    {yylval.asTree = new astNode(yytext, "OR", 0); return OR;}
+{LOGIC}   {yylval.asTree = new astNode(yytext, "LOGIC", 0); return LOGIC;}
 {NOT}   {yylval.asTree = new astNode(yytext, "NOT", 0); return NOT;}
 {LPT}   {yylval.asTree = new astNode(yytext, "LPT", 0); return LPT;}
 {RPT}   {yylval.asTree = new astNode(yytext, "RPT", 0); return RPT;}

@@ -35,6 +35,7 @@ public:
     llvm::Value*                                      IRBuildRet(llvm::Function* func);
     llvm::Value*                                      IRBuildOutput();
     llvm::Value*                                      IRBuildInput();
+    llvm::Value*                                      typeCast(llvm::Value* elem1, llvm::Value* elem2);
 };
 llvm::AllocaInst* CreateEntryBlockAlloca(llvm::Function* func, const std::string& varName, llvm::Type* type);
 
@@ -702,11 +703,75 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
                                                                          /*Name=*/"strConst");
                 llvm::SmallVector<llvm::Value*, 2> indexVector;
                 llvm::Value*                       const0 = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(theContext), 0);
+                // llvm::Value* const0 = Builder.getInt32(0);
                 indexVector.push_back(const0);
                 indexVector.push_back(const0);
                 llvm::Value* strPtr = Builder.CreateInBoundsGEP(gStrPtr, indexVector, "arrayPtr");
                 return strPtr;
             }
+        }
+        // exp → exp dbOper exp
+        // dbOper → PLUS | MINUS | MULTI | DIV | LOGIC | RELOP | ASSIGN
+        else if (exp->childPtr[1]->nodeValue->compare("dbOper") == 0)
+        {
+            // 赋值语句
+            if (exp->childPtr[1]->childPtr[0]->nodeValue->compare("ASSIGN") == 0)
+            {
+            }
+            // 比较语句
+            else if (exp->childPtr[1]->childPtr[0]->nodeValue->compare("RELOP") == 0)
+            {
+            }
+            // 逻辑运算 && ||
+            else if (exp->childPtr[1]->childPtr[0]->nodeValue->compare("LOGIC") == 0)
+            {
+                llvm::Value* leftExp  = exp->childPtr[0]->IRBuildExp(func);
+                llvm::Value* rightExp = exp->childPtr[2]->IRBuildExp(func);
+                if (leftExp->getType() != llvm::Type::getInt1Ty(theContext) || rightExp->getType() != llvm::Type::getInt1Ty(theContext))
+                {
+                    throw("Logic oper only for bool\n");
+                }
+                if (exp->childPtr[1]->childPtr[0]->nodeName->compare("&&") == 0)
+                {
+                    return Builder.CreateAnd(leftExp, rightExp, "andTmp");
+                }
+                else if (exp->childPtr[1]->childPtr[0]->nodeName->compare("||") == 0)
+                {
+                    return Builder.CreateOr(leftExp, rightExp, "orTmp");
+                }
+            }
+            // + - * /
+            else
+            {
+                llvm::Value* leftExp  = exp->childPtr[0]->IRBuildExp(func);
+                llvm::Value* rightExp = exp->childPtr[2]->IRBuildExp(func);
+            }
+        }
+        // exp → sgOper exp
+        // sgOper → MINUS | NOT | PLUS
+        else if (exp->childPtr[0]->nodeValue->compare("sgOper") == 0)
+        {
+            if (exp->childPtr[0]->childPtr[0]->nodeValue->compare("MINUS") == 0)
+            {
+                return Builder.CreateNeg(exp->childPtr[1]->IRBuildExp(func), "negTmp");
+            }
+            else if (exp->childPtr[0]->childPtr[0]->nodeValue->compare("NOT") == 0)
+            {
+                if (exp->childPtr[1]->IRBuildExp(func)->getType() != llvm::Type::getInt1Ty(theContext))
+                {
+                    throw("! only for bool\n");
+                }
+                return Builder.CreateNot(exp->childPtr[1]->IRBuildExp(func), "notTmp");
+            }
+            else if (exp->childPtr[0]->childPtr[0]->nodeValue->compare("PLUS") == 0)
+            {
+                return exp->childPtr[1]->IRBuildExp(func);
+            }
+        }
+        // exp → LPT exp RPT
+        else if (exp->childPtr[0]->nodeValue->compare("LPT") == 0)
+        {
+            return exp->childPtr[1]->IRBuildExp(func);
         }
         // exp → ID | ID Array | ID funcCall
         else if (exp->childPtr[0]->nodeValue->compare("ID") == 0)
@@ -774,7 +839,7 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
                     {
                         throw("Function Undeclared\n");
                     }
-                    return Builder.CreateCall(calleeF, nullptr, "calltmp");
+                    return Builder.CreateCall(calleeF, nullptr, "callTmp");
                 }
                 // ID(argList)
                 else if (exp->childPtr[1]->childNum == 3)
@@ -795,7 +860,7 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
                         throw("Function Undeclared\n");
                     }
                     std::vector<llvm::Value*>* argsV = exp->childPtr[1]->childPtr[1]->getArgList(func);
-                    return Builder.CreateCall(calleeF, *argsV, "calltmp");
+                    return Builder.CreateCall(calleeF, *argsV, "callTmp");
                 }
             }
         }
@@ -926,6 +991,18 @@ llvm::Value* IRBuildOutput() {}
  * @return {*}
  */
 llvm::Value* IRBuildInput() {}
+
+/**
+ * @description: 二元运算隐式类型转换
+ * @param {llvm::Value*} elem1
+ * @param {llvm::Value*} elem2
+ * @return {*}
+ */
+llvm::Value* typeCast(llvm::Value* elem1, llvm::Value* elem2)
+{
+    llvm::Type* type1 = elem1->getType();
+    llvm::Type* type2 = elem2->getType();
+}
 
 /**
  * @description: 辅助函数，创建局部变量 申请内存

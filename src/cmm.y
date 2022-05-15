@@ -32,11 +32,9 @@
 %token <asTree> MINUS
 %token <asTree> MULTI
 %token <asTree> DIV
-%token <asTree> MOD
 %token <asTree> RELOP
 %token <asTree> ASSIGN
-%token <asTree> AND
-%token <asTree> OR
+%token <asTree> LOGIC
 %token <asTree> NOT
 %token <asTree> LPT
 %token <asTree> RPT
@@ -77,8 +75,8 @@
 %nonassoc LOWER_THAN_ELSE
 %nonassoc ELSE
 
-%left PLUS MINUS MULTI DIV MOD
-%left RELOP ASSIGN AND OR
+%left PLUS MINUS MULTI DIV
+%left RELOP ASSIGN LOGIC
 %left LPT RPT LSB RSB
 %right NOT
 
@@ -279,21 +277,15 @@ dbOper:
     | DIV {
         $$ = new astNode("", "dbOper", 1, $1);
     }
-    | MOD {
-        $$ = new astNode("", "dbOper", 1, $1);
-    }
     | RELOP {
         $$ = new astNode("", "dbOper", 1, $1);
     }
     | ASSIGN {
         $$ = new astNode("", "dbOper", 1, $1);
     }
-    | AND {
+    | LOGIC {
         $$ = new astNode("", "dbOper", 1, $1);
     }
-    | OR {
-        $$ = new astNode("", "dbOper", 1, $1);
-    };
 
 sgOper:
     MINUS {
