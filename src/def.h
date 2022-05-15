@@ -6,6 +6,7 @@
 #pragma once
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/GenericValue.h"
 #include "llvm/ExecutionEngine/Interpreter.h"
 #include "llvm/IR/Constants.h"
@@ -29,15 +30,6 @@
 #include <utility>
 #include <vector>
 
-// 记录了LLVM的核心数据结构，比如类型和常量表，不过不太需要关心它的内部
-llvm::LLVMContext LLVMContext;
-// 用于创建LLVM指令
-llvm::IRBuilder<> Builder(LLVMContext);
-// 用于管理函数和全局变量，类似于类c++的编译单元(单个cpp文件)
-llvm::Module* gModule;
-// 用于记录函数的变量参数
-std::map<std::string, llvm::Value*> namedValues;
-
 #define ERROR -1
 #define VAR 0
 #define INT 1
@@ -51,3 +43,14 @@ std::map<std::string, llvm::Value*> namedValues;
 #define ARRAY_BOOL 9
 #define VOID 10
 #define FUNC 11
+
+// 记录了LLVM的核心数据结构，比如类型和常量表，不过不太需要关心它的内部
+llvm::LLVMContext theContext;
+// 用于创建LLVM指令
+llvm::IRBuilder<> Builder(theContext);
+// 用于管理函数和全局变量，类似于类c++的编译单元(单个cpp文件)
+llvm::Module* gModule = new llvm::Module("myCMM", theContext);
+// 用于记录函数的变量参数
+std::map<std::string, llvm::Value*> namedValues;
+// 函数栈, 标记当前函数
+// std::stack<llvm::Function*> funcStack;

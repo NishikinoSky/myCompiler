@@ -4,4 +4,10 @@
  * @Description: Heil Diana
  */
 #pragma once
+#include "ast.h"
 #include "def.h"
+
+class codeGen
+{
+public:
+}

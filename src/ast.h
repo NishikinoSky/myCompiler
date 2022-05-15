@@ -23,17 +23,20 @@ public:
     llvm::Type*                                       getLLVMType(int type, int size);
     std::vector<std::pair<int, std::string>>*         getVarList();
     std::vector<std::pair<llvm::Type*, std::string>>* getParamList();
-    std::vector<llvm::Value*>*                        getArgList();
+    std::vector<llvm::Value*>*                        getArgList(llvm::Function* func);
     llvm::Value*                                      IRBuilder();
-    llvm::Value*                                      IRBuildVar(bool ifGlobalVar);
+    llvm::Value*                                      IRBuildVar(llvm::Function* func);
     llvm::Value*                                      IRBuildFunc();
-    llvm::Value*                                      IRBuildCompoundStmt();
-    llvm::Value*                                      IRBuildStmt();
-    llvm::Value*                                      IRBuildExp();
-    llvm::Value*                                      IRBuildSelec();
-    llvm::Value*                                      IRBuildIter();
-    llvm::Value*                                      IRBuildRet();
+    llvm::Value*                                      IRBuildCompoundStmt(llvm::Function* func);
+    llvm::Value*                                      IRBuildStmt(llvm::Function* func);
+    llvm::Value*                                      IRBuildExp(llvm::Function* func);
+    llvm::Value*                                      IRBuildSelec(llvm::Function* func);
+    llvm::Value*                                      IRBuildIter(llvm::Function* func);
+    llvm::Value*                                      IRBuildRet(llvm::Function* func);
+    llvm::Value*                                      IRBuildOutput();
+    llvm::Value*                                      IRBuildInput();
 };
+llvm::AllocaInst* CreateEntryBlockAlloca(llvm::Function* func, const std::string& varName, llvm::Type* type);
 
 /**
  * @description: 词法分析构建leaf
@@ -145,60 +148,60 @@ llvm::Type* astNode::getLLVMType(int type, int size)
     switch (type)
     {
     case INT:
-        return llvm::Type::getInt32Ty(LLVMContext);
+        return llvm::Type::getInt32Ty(theContext);
         break;
     case FLOAT:
-        return llvm::Type::getFloatTy(LLVMContext);
+        return llvm::Type::getFloatTy(theContext);
         break;
     case CHAR:
-        return llvm::Type::getInt8Ty(LLVMContext);
+        return llvm::Type::getInt8Ty(theContext);
         break;
     case BOOL:
-        return llvm::Type::getInt1Ty(LLVMContext);
+        return llvm::Type::getInt1Ty(theContext);
         break;
     case ARRAY_INT:
         if (size)
         {
-            return llvm::ArrayType::get(llvm::Type::getInt32Ty(LLVMContext), size);
+            return llvm::ArrayType::get(llvm::Type::getInt32Ty(theContext), size);
         }
         else
         {
-            return llvm::Type::getInt32PtrTy(LLVMContext);
+            return llvm::Type::getInt32PtrTy(theContext);
         }
         break;
     case ARRAY_FLOAT:
         if (size)
         {
-            return llvm::ArrayType::get(llvm::Type::getFloatTy(LLVMContext), size);
+            return llvm::ArrayType::get(llvm::Type::getFloatTy(theContext), size);
         }
         else
         {
-            return llvm::Type::getFloatPtrTy(LLVMContext);
+            return llvm::Type::getFloatPtrTy(theContext);
         }
         break;
     case ARRAY_CHAR:
         if (size)
         {
-            return llvm::ArrayType::get(llvm::Type::getInt8Ty(LLVMContext), size);
+            return llvm::ArrayType::get(llvm::Type::getInt8Ty(theContext), size);
         }
         else
         {
-            return llvm::Type::getInt8PtrTy(LLVMContext);
+            return llvm::Type::getInt8PtrTy(theContext);
         }
         break;
     case ARRAY_BOOL:
         if (size)
         {
-            return llvm::ArrayType::get(llvm::Type::getInt1Ty(LLVMContext), size);
+            return llvm::ArrayType::get(llvm::Type::getInt1Ty(theContext), size);
         }
         else
         {
-            return llvm::Type::getInt1PtrTy(LLVMContext);
+            return llvm::Type::getInt1PtrTy(theContext);
         }
         break;
     default:
         // void
-        return llvm::Type::getVoidTy(LLVMContext);
+        return llvm::Type::getVoidTy(theContext);
         break;
     }
 }
@@ -311,7 +314,38 @@ std::vector<std::pair<llvm::Type*, std::string>>* astNode::getParamList()
  * @return {*}
  * argList → exp COMMA argList | exp
  */
-std::vector<llvm::Value*>* astNode::getArgList() {}
+std::vector<llvm::Value*>* astNode::getArgList(llvm::Function* func)
+{
+    astNode* node = this;
+    if (node->nodeValue->compare("argList") == 0)
+    {
+        std::vector<llvm::Value*>  argList;
+        std::vector<llvm::Value*>* argListPtr;
+        while (true)
+        {
+            if (node->childNum == 1)
+            {
+                argList.push_back(node->childPtr[0]->IRBuildExp(func));
+                break;
+            }
+            else if (node->childNum == 3)
+            {
+                argList.push_back(node->childPtr[0]->IRBuildExp(func));
+                node = node->childPtr[2];
+            }
+            else
+            {
+                throw("Arg Error\n");
+            }
+        }
+        argListPtr = &argList;
+        return argListPtr;
+    }
+    else
+    {
+        throw("Not argList\n");
+    }
+}
 
 
 /**
@@ -328,7 +362,7 @@ llvm::Value* astNode::IRBuilder()
     {
         if (this->childPtr[0]->nodeValue->compare("varDeclaration"))
         {
-            return this->IRBuildVar(1);
+            return this->IRBuildVar(nullptr);
         }
         else if (this->childPtr[0]->nodeValue->compare("funcDeclaration"))
         {
@@ -344,14 +378,14 @@ llvm::Value* astNode::IRBuilder()
 
 /**
  * @description: var相关的IR生成
- * @param {*}
+ * @param {llvm::Function*} func 当前所在函数
  * @return {*}
  * varDeclaration → typeSpecifier varDecList SEMICOLON
  * typeSpecifier → TYPE
  * varDecList → varDef | varDef COMMA varDecList
  * varDef → ID | ID LSB INT RSB
  */
-llvm::Value* astNode::IRBuildVar(bool ifGlobalVar)
+llvm::Value* astNode::IRBuildVar(llvm::Function* func)
 {
     std::vector<std::pair<int, std::string>>*          varList = getVarList();
     std::vector<std::pair<int, std::string>>::iterator it;
@@ -371,11 +405,17 @@ llvm::Value* astNode::IRBuildVar(bool ifGlobalVar)
         }
 
         // 全局变量
-        if (ifGlobalVar)
+        if (func == nullptr)
         {
+            // 全局变量重名
+            if (gModule->getGlobalVariable(it->second, true) != nullptr)
+            {
+                throw("GlobalVar Name Duplicated.\n");
+            }
             // 全局数组
             if (llvmType->isArrayTy())
             {
+                // 全局变量插入全局变量表
                 llvm::GlobalVariable*        gArrayPtr = new llvm::GlobalVariable(/*Module=*/*gModule,
                                                                            /*Type=*/llvmType,
                                                                            /*isConstant=*/true,
@@ -408,6 +448,11 @@ llvm::Value* astNode::IRBuildVar(bool ifGlobalVar)
         // 局部变量
         else
         {
+            if (func->getValueSymbolTable()->lookup(it->second) != nullptr)
+            {
+                throw("LocalVar Name Duplicated.\n");
+            }
+            llvm::AllocaInst* varAlloca = CreateEntryBlockAlloca(func, it->second, llvmType);
         }
     }
     return 0;
@@ -442,11 +487,12 @@ llvm::Value* astNode::IRBuildFunc()
     {
         paramList = nullptr;
     }
+
     // 根据返回值类型和参数类型得到函数类型
     llvm::FunctionType* funcType = llvm::FunctionType::get(retType, funcArgs, /*isVarArg*/ false);
     // llvm::Function* func = llvm::cast<llvm::Function>(gModule->getOrInsertFunction(*this->childPtr[1]->childPtr[0]->nodeName, funcType));
     llvm::Function* func = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, *this->childPtr[1]->childPtr[0]->nodeName, gModule);
-    // 存储参数（获取参数的引用）
+    //  存储参数（获取参数的引用）
     if (paramList != nullptr)
     {
         std::vector<std::pair<llvm::Type*, std::string>>::iterator it = paramList->begin();
@@ -458,25 +504,23 @@ llvm::Value* astNode::IRBuildFunc()
     }
     // 函数体
     // 创建函数的代码块
-    llvm::BasicBlock* entry = llvm::BasicBlock::Create(LLVMContext, "entry", func);
+    llvm::BasicBlock* entry = llvm::BasicBlock::Create(theContext, "entry", func);
     Builder.SetInsertPoint(entry);
-    this->childPtr[2]->IRBuildCompoundStmt();
-
-
+    this->childPtr[2]->IRBuildCompoundStmt(func);
 
     return func;
 }
 
 /**
  * @description: compoundStmt相关IR生成，函数体框架
- * @param {*}
+ * @param {llvm::Function*} func 当前所在函数
  * @return {*}
  * compoundStmt → LCB content RCB
  * content → localDec stmtList | %empty
  * localDec → varDeclaration localDec | %empty
  * stmtList → stmt stmtList | %empty
  */
-llvm::Value* astNode::IRBuildCompoundStmt()
+llvm::Value* astNode::IRBuildCompoundStmt(llvm::Function* func)
 {
     if (this->nodeValue->compare("compoundStmt") == 0)
     {
@@ -494,7 +538,7 @@ llvm::Value* astNode::IRBuildCompoundStmt()
             astNode* stmtList = this->childPtr[1]->childPtr[1];
             while (stmtList->childNum == 2)
             {
-                stmtList->childPtr[0]->IRBuildStmt();
+                stmtList->childPtr[0]->IRBuildStmt(func);
                 stmtList = stmtList->childPtr[1];
             }
         }
@@ -508,31 +552,31 @@ llvm::Value* astNode::IRBuildCompoundStmt()
 
 /**
  * @description: 生成stmt相关IR, 负责调用各种类型的语句的IR生成
- * @param {*}
+ * @param {llvm::Function*} func 当前所在函数
  * @return {*}
  * stmt → expStmt | compoundStmt | selecStmt | iterStmt | retStmt
  */
-llvm::Value* astNode::IRBuildStmt()
+llvm::Value* astNode::IRBuildStmt(llvm::Function* func)
 {
     if (this->childPtr[0]->nodeValue->compare("expStmt") == 0)
     {
-        return this->childPtr[0]->IRBuildExp();
+        return this->childPtr[0]->IRBuildExp(func);
     }
     else if (this->childPtr[0]->nodeValue->compare("compoundStmt") == 0)
     {
-        return this->childPtr[0]->IRBuildCompoundStmt();
+        return this->childPtr[0]->IRBuildCompoundStmt(func);
     }
     else if (this->childPtr[0]->nodeValue->compare("selecStmt") == 0)
     {
-        return this->childPtr[0]->IRBuildSelec();
+        return this->childPtr[0]->IRBuildSelec(func);
     }
     else if (this->childPtr[0]->nodeValue->compare("iterStmt") == 0)
     {
-        return this->childPtr[0]->IRBuildIter();
+        return this->childPtr[0]->IRBuildIter(func);
     }
     else if (this->childPtr[0]->nodeValue->compare("retStmt") == 0)
     {
-        return this->childPtr[0]->IRBuildRet();
+        return this->childPtr[0]->IRBuildRet(func);
     }
     else
     {
@@ -540,29 +584,248 @@ llvm::Value* astNode::IRBuildStmt()
     }
 }
 
-llvm::Value* astNode::IRBuildExp()
+/**
+ * @description: 表达式相关ir生成
+ * @param {llvm::Function*} func 当前所在函数
+ * @return {*}
+ * expStmt → exp SEMICOLON | SEMICOLON
+ * exp → exp dbOper exp | sgOper exp | LPT exp RPT | ID | ID Array | ID funcCall | sgFactor
+ * sgFactor → INT | FLOAT | CHAR | BOOL | STR
+ */
+llvm::Value* astNode::IRBuildExp(llvm::Function* func)
 {
+    // expStmt → exp SEMICOLON
+    if (this->childPtr[0]->nodeValue->compare("exp") == 0)
+    {
+        astNode* exp = this->childPtr[0];
+        if (exp->childPtr[0]->nodeValue->compare("sgFactor") == 0)
+        {
+            astNode* sgFactor = exp->childPtr[0];
+            if (sgFactor->childPtr[0]->nodeValue->compare("INT") == 0)
+            {
+                int num = std::stoi(*sgFactor->childPtr[0]->nodeName);
+                return Builder.getInt32(num);
+            }
+            else if (sgFactor->childPtr[0]->nodeValue->compare("FLOAT") == 0)
+            {
+                float num = std::stof(*sgFactor->childPtr[0]->nodeName);
+                return llvm::ConstantFP::get(Builder.getFloatTy(), llvm::APFloat(num));
+            }
+            else if (sgFactor->childPtr[0]->nodeValue->compare("CHAR") == 0)
+            {
+                std::string::iterator it = sgFactor->childPtr[0]->nodeName->begin() + 1;
+                // 非转义字符
+                if (*it != '\\')
+                {
+                    return Builder.getInt8(*it);
+                }
+                // 转义字符
+                else if (sgFactor->childPtr[0]->nodeName->compare("\a") == 0)
+                {
+                    return Builder.getInt8('\a');
+                }
+                else if (sgFactor->childPtr[0]->nodeName->compare("\b") == 0)
+                {
+                    return Builder.getInt8('\b');
+                }
+                else if (sgFactor->childPtr[0]->nodeName->compare("\f") == 0)
+                {
+                    return Builder.getInt8('\f');
+                }
+                else if (sgFactor->childPtr[0]->nodeName->compare("\n") == 0)
+                {
+                    return Builder.getInt8('\n');
+                }
+                else if (sgFactor->childPtr[0]->nodeName->compare("\r") == 0)
+                {
+                    return Builder.getInt8('\r');
+                }
+                else if (sgFactor->childPtr[0]->nodeName->compare("\t") == 0)
+                {
+                    return Builder.getInt8('\t');
+                }
+                else if (sgFactor->childPtr[0]->nodeName->compare("\v") == 0)
+                {
+                    return Builder.getInt8('\v');
+                }
+                else if (sgFactor->childPtr[0]->nodeName->compare("\\") == 0)
+                {
+                    return Builder.getInt8('\\');
+                }
+                else if (sgFactor->childPtr[0]->nodeName->compare("\?") == 0)
+                {
+                    return Builder.getInt8('\?');
+                }
+                else if (sgFactor->childPtr[0]->nodeName->compare("\'") == 0)
+                {
+                    return Builder.getInt8('\'');
+                }
+                else if (sgFactor->childPtr[0]->nodeName->compare("\"") == 0)
+                {
+                    return Builder.getInt8('\"');
+                }
+                else if (sgFactor->childPtr[0]->nodeName->compare("\0") == 0)
+                {
+                    return Builder.getInt8('\0');
+                }
+                else
+                {
+                    throw("exp CHAR Error\n");
+                }
+            }
+            else if (sgFactor->childPtr[0]->nodeValue->compare("BOOL") == 0)
+            {
+                if (sgFactor->childPtr[0]->nodeName->compare("true") == 0)
+                {
+                    return Builder.getInt1(true);
+                }
+                else if (sgFactor->childPtr[0]->nodeName->compare("false") == 0)
+                {
+                    return Builder.getInt1(false);
+                }
+                else
+                {
+                    throw("exp BOOL Error\n");
+                }
+            }
+            else if (sgFactor->childPtr[0]->nodeValue->compare("STR") == 0)
+            {
+                // 获取字符串, 去除\"\"
+                std::string str                             = *sgFactor->childPtr[0]->nodeName;
+                str                                         = str.substr(1, str.length() - 2);
+                llvm::Constant*                    strConst = llvm::ConstantDataArray::getString(theContext, str, true);
+                llvm::GlobalVariable*              gStrPtr  = new llvm::GlobalVariable(/*Module=*/*gModule,
+                                                                         /*Type=*/strConst->getType(),
+                                                                         /*isConstant=*/true,
+                                                                         /*Linkage=*/llvm::GlobalValue::PrivateLinkage,
+                                                                         /*Initializer=*/strConst,
+                                                                         /*Name=*/"strConst");
+                llvm::SmallVector<llvm::Value*, 2> indexVector;
+                llvm::Value*                       const0 = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(theContext), 0);
+                indexVector.push_back(const0);
+                indexVector.push_back(const0);
+                llvm::Value* strPtr = Builder.CreateInBoundsGEP(gStrPtr, indexVector, "arrayPtr");
+                return strPtr;
+            }
+        }
+        // exp → ID | ID Array | ID funcCall
+        else if (exp->childPtr[0]->nodeValue->compare("ID") == 0)
+        {
+            // exp → ID
+            if (exp->childNum == 1)
+            {
+                //查找全局变量
+                llvm::Value* var = gModule->getGlobalVariable(*exp->childPtr[0]->nodeName, true);
+                if (var == nullptr)
+                {
+                    // 查找局部变量
+                    var = func->getValueSymbolTable()->lookup(*exp->childPtr[0]->nodeName);
+                    if (var == nullptr)
+                    {
+                        throw("Var Undeclared\n");
+                    }
+                }
+                return var;
+            }
+            // exp → ID Array
+            else if (exp->childPtr[1]->nodeValue->compare("Array") == 0)
+            {
+                // ID[]
+                if (exp->childPtr[1]->childNum == 2)
+                {
+                    //查找全局变量
+                    llvm::Value* var = gModule->getGlobalVariable(*exp->childPtr[0]->nodeName, true);
+                    if (var == nullptr)
+                    {
+                        // 查找局部变量
+                        var = func->getValueSymbolTable()->lookup(*exp->childPtr[0]->nodeName);
+                        if (var == nullptr)
+                        {
+                            throw("Var Undeclared\n");
+                        }
+                    }
+                }
+                // ID[exp]
+                else if (exp->childPtr[1]->childNum == 3)
+                {
+                    //查找全局变量
+                    llvm::Value* var = gModule->getGlobalVariable(*exp->childPtr[0]->nodeName, true);
+                    if (var == nullptr)
+                    {
+                        // 查找局部变量
+                        var = func->getValueSymbolTable()->lookup(*exp->childPtr[0]->nodeName);
+                        if (var == nullptr)
+                        {
+                            throw("Var Undeclared\n");
+                        }
+                    }
+                    llvm::Value* index = exp->childPtr[1]->childPtr[1]->IRBuildExp(func);
+                }
+            }
+            // exp → ID funcCall  ID()
+            else if (exp->childPtr[1]->nodeValue->compare("funcCall") == 0)
+            {
+                // ID()
+                if (exp->childPtr[1]->childNum == 2)
+                {
+                    // Look up the name in the global module table.
+                    llvm::Function* calleeF = gModule->getFunction(*exp->childPtr[0]->nodeName);
+                    if (calleeF == nullptr)
+                    {
+                        throw("Function Undeclared\n");
+                    }
+                    return Builder.CreateCall(calleeF, nullptr, "calltmp");
+                }
+                // ID(argList)
+                else if (exp->childPtr[1]->childNum == 3)
+                {
+                    // Look up the name in the global module table.
+                    if (exp->childPtr[0]->nodeName->compare("output"))
+                    {
+                        return exp->IRBuildOutput();
+                    }
+                    else if (exp->childPtr[0]->nodeName->compare("input"))
+                    {
+                        return exp->IRBuildInput();
+                    }
+
+                    llvm::Function* calleeF = gModule->getFunction(*exp->childPtr[0]->nodeName);
+                    if (calleeF == nullptr)
+                    {
+                        throw("Function Undeclared\n");
+                    }
+                    std::vector<llvm::Value*>* argsV = exp->childPtr[1]->childPtr[1]->getArgList(func);
+                    return Builder.CreateCall(calleeF, *argsV, "calltmp");
+                }
+            }
+        }
+    }
+    // expStmt → SEMICOLON
+    else
+    {
+        return NULL;
+    }
 }
 
 /**
  * @description: if相关语句IR生成
- * @param {*}
+ * @param {llvm::Function*} func 当前所在函数
  * @return {*}
  * selecStmt → IF LPT exp RPT stmt %prec LOWER_THAN_ELSE | IF LPT exp RPT stmt ELSE stmt
  */
-llvm::Value* astNode::IRBuildSelec()
+llvm::Value* astNode::IRBuildSelec(llvm::Function* func)
 {
-    llvm::Value* condV            = this->childPtr[2]->IRBuildExp();
-    condV                         = Builder.CreateFCmpONE(condV, llvm::ConstantFP::get(LLVMContext, llvm::APFloat(0.0)), "ifCond");
+    llvm::Value* condV            = this->childPtr[2]->IRBuildExp(func);
+    condV                         = Builder.CreateFCmpONE(condV, llvm::ConstantFP::get(theContext, llvm::APFloat(0.0)), "ifCond");
     llvm::Function*   theFunction = Builder.GetInsertBlock()->getParent();
-    llvm::BasicBlock* thenBB      = llvm::BasicBlock::Create(LLVMContext, "then", theFunction);   // 自动加到函数中
-    llvm::BasicBlock* elseBB      = llvm::BasicBlock::Create(LLVMContext, "else");
-    llvm::BasicBlock* mergeBB     = llvm::BasicBlock::Create(LLVMContext, "ifcont");
+    llvm::BasicBlock* thenBB      = llvm::BasicBlock::Create(theContext, "then", theFunction);   // 自动加到函数中
+    llvm::BasicBlock* elseBB      = llvm::BasicBlock::Create(theContext, "else");
+    llvm::BasicBlock* mergeBB     = llvm::BasicBlock::Create(theContext, "ifcont");
     llvm::BranchInst* select      = Builder.CreateCondBr(condV, thenBB, elseBB);   // 插入条件分支语句的指令
 
     // Then语句处理
     Builder.SetInsertPoint(thenBB);
-    llvm::Value* thenV = this->childPtr[4]->IRBuildStmt();
+    llvm::Value* thenV = this->childPtr[4]->IRBuildStmt(func);
     Builder.CreateBr(mergeBB);           // 插入跳转到Merge分支的指令
     thenBB = Builder.GetInsertBlock();   // 获取Then语句的出口
 
@@ -573,7 +836,7 @@ llvm::Value* astNode::IRBuildSelec()
     // selecStmt → IF LPT exp RPT stmt ELSE stmt
     if (this->childNum == 7)
     {
-        elseV = this->childPtr[6]->IRBuildStmt();
+        elseV = this->childPtr[6]->IRBuildStmt(func);
     }
     Builder.CreateBr(mergeBB);           // 插入跳转到Merge分支的指令
     elseBB = Builder.GetInsertBlock();   // 获取Else语句的出口
@@ -586,28 +849,32 @@ llvm::Value* astNode::IRBuildSelec()
 
 /**
  * @description: while相关语句生成
- * @param {*}
+ * @param {llvm::Function*} func 当前所在函数
  * @return {*}
  * iterStmt → WHILE LPT exp RPT stmt
  */
-llvm::Value* astNode::IRBuildIter()
+llvm::Value* astNode::IRBuildIter(llvm::Function* func)
 {
     llvm::Function*   theFunction = Builder.GetInsertBlock()->getParent();
-    llvm::BasicBlock* condBB      = llvm::BasicBlock::Create(LLVMContext, "cond", theFunction);
-    llvm::BasicBlock* bodyBB      = llvm::BasicBlock::Create(LLVMContext, "body", theFunction);
-    llvm::BasicBlock* endBB       = llvm::BasicBlock::Create(LLVMContext, "end", theFunction);
+    llvm::BasicBlock* condBB      = llvm::BasicBlock::Create(theContext, "cond", theFunction);
+    llvm::BasicBlock* bodyBB      = llvm::BasicBlock::Create(theContext, "body", theFunction);
+    llvm::BasicBlock* endBB       = llvm::BasicBlock::Create(theContext, "end", theFunction);
     Builder.CreateBr(condBB);   // 跳转到条件分支
 
     // condBB基本块
     Builder.SetInsertPoint(condBB);
-    llvm::Value* condV       = this->childPtr[2]->IRBuildExp();
-    condV                    = Builder.CreateFCmpONE(condV, llvm::ConstantFP::get(LLVMContext, llvm::APFloat(0.0)), "whileCond");
+    llvm::Value* condV       = this->childPtr[2]->IRBuildExp(func);
+    condV                    = Builder.CreateFCmpONE(condV, llvm::ConstantFP::get(theContext, llvm::APFloat(0.0)), "whileCond");
     llvm::BranchInst* select = Builder.CreateCondBr(condV, bodyBB, endBB);   // 插入分支语句的指令
     condBB                   = Builder.GetInsertBlock();                     // 获取条件语句的出口
 
     // bodyBB基本块
     Builder.SetInsertPoint(bodyBB);
-    llvm::Value* bodyV = this->childPtr[4]->IRBuildStmt();
+    llvm::Value* bodyV = this->childPtr[4]->IRBuildStmt(func);
+    if (bodyV == nullptr)   // break;
+    {
+        Builder.CreateBr(endBB);   // 跳转到endBB
+    }
     Builder.CreateBr(condBB);   // 跳转到condBB
 
     // endBB基本块
@@ -618,16 +885,16 @@ llvm::Value* astNode::IRBuildIter()
 
 /**
  * @description: return & break 语句相关IR生成
- * @param {*}
+ * @param {llvm::Function*} func 当前所在函数
  * @return {*}
  * retStmt → RETURN exp SEMICOLON | RETURN SEMICOLON | BREAK SEMICOLON
  */
-llvm::Value* astNode::IRBuildRet()
+llvm::Value* astNode::IRBuildRet(llvm::Function* func)
 {
     // retStmt → RETURN exp SEMICOLON
     if (this->childNum == 3)
     {
-        llvm::Value* ret = this->childPtr[1]->IRBuildExp();
+        llvm::Value* ret = this->childPtr[1]->IRBuildExp(func);
         return Builder.CreateRet(ret);
     }
     // retStmt → RETURN SEMICOLON
@@ -638,9 +905,38 @@ llvm::Value* astNode::IRBuildRet()
     // retStmt → BREAK SEMICOLON
     else if (this->childPtr[0]->nodeValue->compare("BREAK") == 0)
     {
+        return nullptr;
     }
     else
     {
         throw("RET ERROR\n");
     }
+}
+
+/**
+ * @description: output IR生成
+ * @param {*}
+ * @return {*}
+ */
+llvm::Value* IRBuildOutput() {}
+
+/**
+ * @description: Input IR生成
+ * @param {*}
+ * @return {*}
+ */
+llvm::Value* IRBuildInput() {}
+
+/**
+ * @description: 辅助函数，创建局部变量 申请内存
+ * @param {llvm::Function*} func
+ * @param {llvm::StringRef} varName
+ * @param {llvm::Type*} type
+ * @return CreateAlloca(type, 0, varName)
+ */
+llvm::AllocaInst* CreateEntryBlockAlloca(llvm::Function* func, const std::string& varName, llvm::Type* type)
+{
+    llvm::IRBuilder<> tmpB(&func->getEntryBlock(),
+                           func->getEntryBlock().begin());
+    return tmpB.CreateAlloca(type, 0, varName);
 }

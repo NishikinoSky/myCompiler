@@ -27,10 +27,19 @@
 @@@@@@@@@@+:. ..      .=*@@@@@@=              .%@@@@@#=.          ..#@@@@@@@@@@@
 @@@@@@@@@@@@%*@@#=. .+@@@@@@@@%                -@@@@@@@@*:   .-#+.#@@@@@@@@@@@@@
                                     badCode
-                                  二小姐救救我
+                                   二小姐救救我
 */
 /*
  * @Author: Skyyyy
  * @Date: 2022-03-14 14:31:15
  * @Description: Heil Diana
  */
+#include "ast.h"
+#include "codeGen.h"
+#include "def.h"
+
+int main()
+{
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+}

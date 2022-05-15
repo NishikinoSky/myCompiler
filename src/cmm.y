@@ -253,6 +253,9 @@ exp:
     | LPT exp RPT {
         $$ = new astNode("", "exp", 3, $1, $2, $3);
     }
+    | ID {
+        $$ = new astNode("", "exp", 1, $1);
+    }
     | ID Array {
         $$ = new astNode("", "exp", 2, $1, $2);
     }
@@ -328,10 +331,7 @@ argList:
     };
 
 sgFactor:
-    ID {
-        $$ = new astNode("", "sgFactor", 1, $1);
-    }
-    | INT {
+    INT {
         $$ = new astNode("", "sgFactor", 1, $1);
     }
     | FLOAT {
