@@ -118,11 +118,11 @@ iterStmt → WHILE LPT exp RPT stmt 🍺
 retStmt → RETURN exp SEMICOLON | RETURN SEMICOLON | BREAK SEMICOLON 🍺
 expStmt → exp SEMICOLON | SEMICOLON
 exp → exp dbOper exp | sgOper exp | LPT exp RPT | ID | ID Array | ID funcCall | sgFactor
-dbOper → PLUS | MINUS | MULTI | DIV | MOD | RELOP | ASSIGN | AND | OR
+dbOper → PLUS | MINUS | MULTI | DIV | RELOP | ASSIGN | AND | OR
 sgOper → MINUS | NOT | PLUS
 Array → LSB exp RSB | LSB RSB
 funcCall → LPT argList RPT | LPT RPT
-argList → exp COMMA argList | exp
+argList → exp COMMA argList | exp 🍺
 sgFactor → INT | FLOAT | CHAR | BOOL | STR
 ```
 
