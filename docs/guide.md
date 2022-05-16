@@ -73,6 +73,10 @@ myCompiler
 
 [创建 使用数组 GEP](https://www.twblogs.net/a/5e4fb5efbd9eee101df85956)
 
+[有用的llvm api](https://llvm.liuxfe.com/docs/ProgrammersManual/important-and-useful-llvm-apis)
+
+[llvm::Instruction::CastOps 操作](https://llvm.org/docs/LangRef.html#constant-expressions)
+
 **规范：**
 
 变量定义采用小驼峰
