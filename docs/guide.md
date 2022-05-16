@@ -18,28 +18,21 @@ myCompiler
 ├── src
 │   ├── cmm.l
 │   ├── cmm.y
-│   ├── 
-│   ├── 
-│   │ 
-│   │ 
-│   ├── 
-│   │     
-│   └── Makefile      
-│          
-│       
-│      
-│       
+│   ├── ast.h
+│   ├── ast.cpp
+│   ├── codeGen.h 
+│   ├── codeGen.cpp 
+│   ├── def.h
+│   ├── main.cpp  
+│   └── Makefile          
 │   
 ├── test
 │ 
-└── vis
+└── js
     ├──
     ├──
     └──
- 
 ```
-
-
 
 ### 2. 相关参考 & 代码规范
 
@@ -77,6 +70,12 @@ myCompiler
 
 [llvm::Instruction::CastOps 操作](https://llvm.org/docs/LangRef.html#constant-expressions)
 
+[LLVM 调用print输出int float](https://www.cxyzjd.com/article/oWuYeFeiYing/44966047)
+
+[一个LLVM相关实验](https://clarazhang.gitbooks.io/compiler-f2017/content/)
+
+[printf 参考](https://blog.csdn.net/xfxyy_sxfancy/article/details/49687653)
+
 **规范：**
 
 变量定义采用小驼峰
@@ -107,7 +106,7 @@ typeSpecifier → TYPE
 varDecList → varDef | varDef COMMA varDecList
 varDef → ID | ID LSB INT RSB
 
-funcDeclaration → typeSpecifier funcDec compoundStmt 🍺 // 还差函数的入/出栈
+funcDeclaration → typeSpecifier funcDec compoundStmt 🍺
 funcDec → ID LPT paramList RPT | ID LPT RPT 🍺
 paramList → paramDec COMMA paramList | paramDec 🍺
 paramDec → typeSpecifier paramDef 🍺
@@ -153,7 +152,7 @@ public:
     astNode(char *nodeName, std::string nodeValue, int lineIndex);          // yytext存储类型为char*，用作词法分析中的leaf构建
     astNode(std::string nodeName, std::string nodeValue, int childNum, ...); //可变参数，用作语法分析中的其余节点构建
     ~astNode();
-    //相关值的method以及llvm提供的c接口
+    //相关值的method以及llvm提供的cpp接口
 };
 ```
 
@@ -169,18 +168,22 @@ Source Code -> | Frontend | Optimizer | Backend | -> Machine Code
 
 LLVM的一大特色就是有着独立的、完善的、严格约束的中间代码表示。这种中间代码，就是LLVM的字节码前端生成这种中间代码，后端自动进行各类优化分析。
 
-#### 5.1 runtime
+#### 5.1 Runtime
 
 ```cpp
 // 记录了LLVM的核心数据结构，比如类型和常量表，不过不太需要关心它的内部
-llvm::LLVMContext gLLVMContext;
+llvm::LLVMContext theContext;
 // 用于创建LLVM指令
-llvm::IRBuilder<> gIRBuilder(gLLVMContext);
+llvm::IRBuilder<> Builder(theContext);
+// 用于管理函数和全局变量，类似于类c++的编译单元(单个cpp文件)
+llvm::Module* gModule = new llvm::Module("myCMM", theContext);
 ```
 
 #### 5.2 符号表
 
-#### 5.3 类型处理 🍺
+theContext
+
+#### 5.3 类型操作 🍺
 
 `def.h`中宏定义类型
 
@@ -218,7 +221,7 @@ PointerType* char_pointer = PointerType::get(IntegerType::get(mod->getContext(),
 ArrayType* array_type = ArrayType::get(Type::getInt32Ty(context), 4);
 ```
 
-#### 5.4 类型转换
+#### 5.4 类型转换（隐式）
 
 [IR类型转换](https://zhuanlan.zhihu.com/p/163063995)
 
@@ -236,7 +239,7 @@ ArrayType* array_type = ArrayType::get(Type::getInt32Ty(context), 4);
 
 🍺 暂且用一个flag `isGobalVar` 表示，由上层调用者传入 (✖️)
 
-🍺 传入当前函数指针 `llvm::Function* func`，全局变量该指针为`nullptr`
+🍺 传入当前函数指针 `llvm::Function* func`，全局变量该指针为`nullptr`，通过判断该指针来区分
 
 ##### 5.5.1 全局变量
 
@@ -290,9 +293,9 @@ gvar_ptr_abc->setInitializer(const_ptr_2);
 
 ```c++
 if (gModule->getGlobalVariable(it->second, true) != NULL)
-            {
-                throw("GlobalVar Name Duplicated.\n");
-            }
+{
+	throw("GlobalVar Name Duplicated.\n");
+}
 ```
 
 ##### 5.5.2 局部变量
@@ -313,6 +316,17 @@ llvm::AllocaInst* CreateEntryBlockAlloca(llvm::Function* func,
 }
 ```
 
+局部变量的查找：
+
+```cpp
+       // 查找局部变量
+   llvm::Value*     var = func->getValueSymbolTable()->lookup(std::string varName);
+        if (var == nullptr)
+        {
+            throw("Var Undeclared\n");
+        }
+```
+
 
 
 #### 5.6 函数处理
@@ -331,6 +345,8 @@ llvm::BasicBlock* entry = llvm::BasicBlock::Create(LLVMContext, "entry", func);
 //created instructions should be appended to the end of the specified block.
 Builder.SetInsertPoint(entry);
 ```
+
+
 
 #### 5.7 分支&循环
 
@@ -544,7 +560,7 @@ Value *CallExprAST::Codegen() {
 
 
 
-#### 5.9 返回语句
+#### 5.9 返回&跳转语句
 
 ##### 5.9.1 return exp;
 
@@ -564,3 +580,13 @@ return Builder.CreateRetVoid();
 **⚠️-----------------------待写**
 
 🍺 暂且让break返回一个nullptr，在whileblock中判断循环体到返回值
+
+#### 5.10 输入输出函数
+
+**⚠️ 能不能添加格式化输入输出---------------------------待写**
+
+##### 5.10.1 print
+
+
+
+##### 5.10.2 scan
