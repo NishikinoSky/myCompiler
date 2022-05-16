@@ -34,12 +34,14 @@ public:
     llvm::Value*                                      IRBuildSelec(llvm::Function* func);
     llvm::Value*                                      IRBuildIter(llvm::Function* func);
     llvm::Value*                                      IRBuildRet(llvm::Function* func);
-    llvm::Value*                                      IRBuildPrint();
-    llvm::Value*                                      IRBuildScan();
+    llvm::Value*                                      IRBuildPrint(llvm::Function* func, bool isPrintln);
+    llvm::Value*                                      IRBuildScan(llvm::Function* func);
     llvm::Value*                                      IRBuildID(llvm::Function* func);
     llvm::Value*                                      typeCast(llvm::Value* elem1, llvm::Type* type2);
 };
 llvm::AllocaInst* CreateEntryBlockAlloca(llvm::Function* func, const std::string& varName, llvm::Type* type);
+
+extern codeGen* generator;
 
 /**
  * @description: 词法分析构建leaf
@@ -259,8 +261,6 @@ std::vector<std::pair<int, std::string>>* astNode::getVarList()
     }
 }
 
-
-
 /**
  * @description: 函数形参，得到paramList
  * @param {*}
@@ -419,12 +419,12 @@ llvm::Value* astNode::IRBuildVar(llvm::Function* func)
             if (llvmType->isArrayTy())
             {
                 // 全局变量插入全局变量表
-                llvm::GlobalVariable*        gArrayPtr = new llvm::GlobalVariable(/*Module=*/*gModule,
-                                                                           /*Type=*/llvmType,
-                                                                           /*isConstant=*/true,
-                                                                           /*Linkage=*/llvm::GlobalValue::PrivateLinkage,
-                                                                           /*Initializer=*/0,   // has initializer, specified below
-                                                                           /*Name=*/it->second);
+                auto                         gArrayPtr = new llvm::GlobalVariable(/*Module=*/*gModule,
+                                                          /*Type=*/llvmType,
+                                                          /*isConstant=*/true,
+                                                          /*Linkage=*/llvm::GlobalValue::PrivateLinkage,
+                                                          /*Initializer=*/0,   // has initializer, specified below
+                                                          /*Name=*/it->second);
                 std::vector<llvm::Constant*> constArrayElems;
                 llvm::Constant*              con = llvm::ConstantInt::get(getLLVMType(getNodeType(this->childPtr[0]), 0), 0);   // 数组单个元素的类型，并且元素初始化为0
                 for (int i = 0; i < arraySize; i++)
@@ -438,13 +438,13 @@ llvm::Value* astNode::IRBuildVar(llvm::Function* func)
             // 非数组
             else
             {
-                llvm::GlobalVariable* gVarPtr = new llvm::GlobalVariable(/*Module=*/*gModule,
-                                                                         /*Type=*/llvmType,
-                                                                         /*isConstant=*/false,
-                                                                         /*Linkage=*/llvm::GlobalValue::PrivateLinkage,
-                                                                         /*Initializer=*/0,   // has initializer, specified below
-                                                                         /*Name=*/it->second);
-                llvm::Constant*       con     = llvm::ConstantInt::get(llvmType, 0);
+                auto            gVarPtr = new llvm::GlobalVariable(/*Module=*/*gModule,
+                                                        /*Type=*/llvmType,
+                                                        /*isConstant=*/false,
+                                                        /*Linkage=*/llvm::GlobalValue::PrivateLinkage,
+                                                        /*Initializer=*/0,   // has initializer, specified below
+                                                        /*Name=*/it->second);
+                llvm::Constant* con     = llvm::ConstantInt::get(llvmType, 0);
                 gVarPtr->setInitializer(con);   //对全局变量初始化，按照ir的语法是必须要初始化的
             }
         }
@@ -698,12 +698,12 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
                 std::string str                             = *sgFactor->childPtr[0]->nodeName;
                 str                                         = str.substr(1, str.length() - 2);
                 llvm::Constant*                    strConst = llvm::ConstantDataArray::getString(theContext, str, true);
-                llvm::GlobalVariable*              gStrPtr  = new llvm::GlobalVariable(/*Module=*/*gModule,
-                                                                         /*Type=*/strConst->getType(),
-                                                                         /*isConstant=*/true,
-                                                                         /*Linkage=*/llvm::GlobalValue::PrivateLinkage,
-                                                                         /*Initializer=*/strConst,
-                                                                         /*Name=*/"strConstTmp");
+                auto                               gStrPtr  = new llvm::GlobalVariable(/*Module=*/*gModule,
+                                                        /*Type=*/strConst->getType(),
+                                                        /*isConstant=*/true,
+                                                        /*Linkage=*/llvm::GlobalValue::PrivateLinkage,
+                                                        /*Initializer=*/strConst,
+                                                        /*Name=*/"strConstTmp");
                 llvm::SmallVector<llvm::Value*, 2> indexVector;
                 llvm::Value*                       const0 = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(theContext), 0);
                 // llvm::Value* const0 = Builder.getInt32(0);
@@ -978,11 +978,15 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
                     // Look up the name in the global module table.
                     if (exp->childPtr[0]->nodeName->compare("print"))
                     {
-                        return exp->IRBuildPrint();
+                        return exp->IRBuildPrint(func, false);
+                    }
+                    else if (exp->childPtr[0]->nodeName->compare("println"))
+                    {
+                        return exp->IRBuildPrint(func, true);
                     }
                     else if (exp->childPtr[0]->nodeName->compare("scan"))
                     {
-                        return exp->IRBuildScan();
+                        return exp->IRBuildScan(func);
                     }
 
                     llvm::Function* calleeF = gModule->getFunction(*exp->childPtr[0]->nodeName);
@@ -1111,8 +1115,71 @@ llvm::Value* astNode::IRBuildRet(llvm::Function* func)
  * @param {*}
  * @return {*}
  * exp → ID LPT paramList RPT
+ * paramList → paramDec COMMA paramList | paramDec
  */
-llvm::Value* astNode::IRBuildPrint() {}
+llvm::Value* astNode::IRBuildPrint(llvm::Function* func, bool isPrintln)
+{
+    std::string               formatStr = "";
+    std::vector<llvm::Value*> printArgs;
+    astNode*                  node = this->childPtr[2];
+    while (true)
+    {
+        llvm::Value* tmp = node->childPtr[0]->IRBuildExp(func);
+        if (node->childNum == 1)
+        {
+            printArgs.push_back(tmp);
+            break;
+        }
+        else if (node->childNum == 3)
+        {
+            printArgs.push_back(tmp);
+            node = node->childPtr[2];
+        }
+        else
+        {
+            throw("print arg error\n");
+        }
+    }
+    for (auto argValue : printArgs)
+    {
+
+        if (argValue->getType() == Builder.getInt32Ty())
+        {
+            formatStr += "%d";
+        }
+        else if (argValue->getType() == Builder.getInt8Ty())
+        {
+            formatStr += "%c";
+        }
+        else if (argValue->getType() == Builder.getInt1Ty())
+        {
+            formatStr += "%d";
+        }
+        else if (argValue->getType()->isDoubleTy())
+        {
+            formatStr += "%lf";
+        }
+        else if (argValue->getType() == Builder.getInt8PtrTy())
+        {
+            formatStr += "%s";
+        }
+        else
+        {
+            throw("Invalid type to write.");
+        }
+    }
+    if (isPrintln)
+    {
+        formatStr += "\n";
+    }
+    llvm::Constant* formatConst  = llvm::ConstantDataArray::getString(theContext, formatStr.c_str());
+    auto            formatStrVar = new llvm::GlobalVariable(*(gModule), llvm::ArrayType::get(Builder.getInt8Ty(), formatStr.size() + 1), true, llvm::GlobalValue::ExternalLinkage, formatConst, ".str");
+    llvm::Constant* zero         = llvm::Constant::getNullValue(Builder.getInt32Ty());
+    llvm::Constant* indices[]    = {zero, zero};
+    auto            varRef       = llvm::ConstantExpr::getGetElementPtr(formatStrVar->getType()->getElementType(), formatStrVar, indices);
+    printArgs.insert(printArgs.begin(), varRef);
+    return Builder.CreateCall(generator->printf, llvm::makeArrayRef(printArgs), "printf");
+}
 
 /**
  * @description: Scan IR生成
@@ -1120,7 +1187,55 @@ llvm::Value* astNode::IRBuildPrint() {}
  * @return {*}
  * exp → ID LPT paramList RPT
  */
-llvm::Value* astNode::IRBuildScan() {}
+llvm::Value* astNode::IRBuildScan(llvm::Function* func)
+{
+    std::string               formatStr = "";
+    std::vector<llvm::Value*> scanArgs;
+    // Just common variable
+    astNode* node = this->childPtr[2];
+    while (true)
+    {
+        if (node->childNum == 1)
+        {
+            scanArgs.push_back(node->childPtr[0]->IRBuildID(func));
+            break;
+        }
+        else
+        {
+            scanArgs.push_back(node->childPtr[0]->IRBuildID(func));
+            node = node->childPtr[2];
+        }
+    }
+    for (auto argValue : scanArgs)
+    {
+        if (argValue->getType()->getPointerElementType() == Builder.getInt32Ty())
+        {
+            formatStr += "%d";
+        }
+        else if (argValue->getType()->getPointerElementType() == Builder.getInt8Ty())
+        {
+            formatStr += "%c";
+        }
+        else if (argValue->getType()->getPointerElementType() == Builder.getInt1Ty())
+        {
+            formatStr += "%d";
+        }
+        else if (argValue->getType()->getPointerElementType() == Builder.getFloatTy())
+        {
+            formatStr += "%lf";
+        }
+        else if (argValue->getType()->getPointerElementType() == Builder.getInt8PtrTy())
+        {
+            formatStr += "%s";
+        }
+        else
+        {
+            throw("Invalid type to read.\n");
+        }
+    }
+    scanArgs.insert(scanArgs.begin(), Builder.CreateGlobalStringPtr(formatStr));
+    return Builder.CreateCall(generator->scanf, scanArgs, "scanf");
+}
 
 /**
  * @description: 寻找ID的内存地址
@@ -1131,12 +1246,12 @@ llvm::Value* astNode::IRBuildScan() {}
  */
 llvm::Value* astNode::IRBuildID(llvm::Function* func)
 {
-    //查找全局变量
-    llvm::Value* var = gModule->getGlobalVariable(*this->childPtr[0]->nodeName, true);
+    //查找局部变量
+    llvm::Value* var = func->getValueSymbolTable()->lookup(*this->childPtr[0]->nodeName);
     if (var == nullptr)
     {
-        // 查找局部变量
-        var = func->getValueSymbolTable()->lookup(*this->childPtr[0]->nodeName);
+        // 查找全局变量
+        var = gModule->getGlobalVariable(*this->childPtr[0]->nodeName, true);
         if (var == nullptr)
         {
             throw("Var Undeclared\n");

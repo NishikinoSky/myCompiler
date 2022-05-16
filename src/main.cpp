@@ -1,4 +1,9 @@
 /*
+ * @Author: Skyyyy
+ * @Date: 2022-03-14 14:31:15
+ * @Description: Heil Diana
+ */
+/*
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#-     :-=+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@+             =%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#               :@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -29,17 +34,21 @@
                                     badCode
                                    二小姐救救我
 */
-/*
- * @Author: Skyyyy
- * @Date: 2022-03-14 14:31:15
- * @Description: Heil Diana
- */
+
 #include "ast.h"
+#include "cmm.hpp"
 #include "codeGen.h"
 #include "def.h"
+
+extern astNode* astRoot;
+extern codeGen* generator;
 
 int main()
 {
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
+    llvm::InitializeNativeTargetAsmParser();
+    generator = new codeGen();
+    generator->codeGenerator(root);
+    return 0;
 }

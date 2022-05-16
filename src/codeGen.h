@@ -21,6 +21,10 @@ llvm::Module* gModule = new llvm::Module("myCMM", theContext);
 class codeGen
 {
 public:
+    llvm::Function *printf, *scanf;
     llvm::Function* printGen();
     llvm::Function* scanGen();
+    void            codeGenerator(astNode* root);
+    codeGen();
+    ~codeGen();
 };

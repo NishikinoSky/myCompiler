@@ -5,6 +5,37 @@
  */
 #include "codeGen.h"
 
+codeGen* generator;
+
+/**
+ * @description: 构造函数
+ * @return {*}
+ */
+codeGen::codeGen()
+{
+    this->printf = this->printGen();
+    this->scanf  = this->scanGen();
+}
+
+/**
+ * @description: 调用ir生成
+ * @param {astNode*} root
+ * @return {*}
+ */
+void codeGen::codeGenerator(astNode* root)
+{
+    root->IRBuilder();
+    gModule->print(llvm::outs(), nullptr);
+}
+
+/**
+ * @description: 析构函数
+ * @return {*}
+ */
+codeGen::~codeGen()
+{
+}
+
 /**
  * @description: print函数的声明
  * @return {*}
@@ -18,4 +49,16 @@ llvm::Function* codeGen::printGen()
     llvm::Function*             printfFunc = llvm::Function::Create(printfType, llvm::Function::ExternalLinkage, llvm::Twine("printf"), gModule);
     printfFunc->setCallingConv(llvm::CallingConv::C);
     return printfFunc;
+}
+
+/**
+ * @description: scan函数的声明
+ * @return {*}
+ */
+llvm::Function* codeGen::scanGen()
+{
+    llvm::FunctionType* scanfType = llvm::FunctionType::get(Builder.getInt32Ty(), true);
+    llvm::Function*     scanfFunc = llvm::Function::Create(scanfType, llvm::Function::ExternalLinkage, llvm::Twine("scanf"), gModule);
+    scanfFunc->setCallingConv(llvm::CallingConv::C);
+    return scanfFunc;
 }
