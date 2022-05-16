@@ -4,6 +4,7 @@
  * @Description: Heil Diana
  */
 #pragma once
+#include "codeGen.h"
 #include "def.h"
 
 class astNode
@@ -700,13 +701,13 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
                                                                          /*isConstant=*/true,
                                                                          /*Linkage=*/llvm::GlobalValue::PrivateLinkage,
                                                                          /*Initializer=*/strConst,
-                                                                         /*Name=*/"strConst");
+                                                                         /*Name=*/"strConstTmp");
                 llvm::SmallVector<llvm::Value*, 2> indexVector;
                 llvm::Value*                       const0 = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(theContext), 0);
                 // llvm::Value* const0 = Builder.getInt32(0);
                 indexVector.push_back(const0);
                 indexVector.push_back(const0);
-                llvm::Value* strPtr = Builder.CreateInBoundsGEP(gStrPtr, indexVector, "arrayPtr");
+                llvm::Value* strPtr = Builder.CreateInBoundsGEP(gStrPtr, indexVector, "arrayPtrTmp");
                 return strPtr;
             }
         }
@@ -721,6 +722,99 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
             // 比较语句
             else if (exp->childPtr[1]->childPtr[0]->nodeValue->compare("RELOP") == 0)
             {
+                llvm::Value* leftExp  = exp->childPtr[0]->IRBuildExp(func);
+                llvm::Value* rightExp = exp->childPtr[2]->IRBuildExp(func);
+                if (leftExp->getType() == llvm::Type::getInt1Ty(theContext) || rightExp->getType() == llvm::Type::getInt1Ty(theContext))
+                {
+                    throw("Relop oper not for bool\n");
+                }
+                // 类型转换 都转换成float或者int
+                if (leftExp->getType() != rightExp->getType())
+                {
+                    if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        rightExp = typeCast(rightExp, leftExp);
+                    }
+                    else if (rightExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        leftExp = typeCast(leftExp, rightExp);
+                    }
+                    else if (leftExp->getType() == llvm::Type::getInt32Ty(theContext))
+                    {
+                        rightExp = typeCast(rightExp, leftExp);
+                    }
+                    else if (rightExp->getType() == llvm::Type::getInt32Ty(theContext))
+                    {
+                        leftExp = typeCast(leftExp, rightExp);
+                    }
+                }
+
+                if (exp->childPtr[1]->childPtr[0]->nodeName->compare("<") == 0)
+                {
+                    if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        return Builder.CreateFCmpOLT(leftExp, rightExp, "OLTTmp");
+                    }
+                    else
+                    {
+                        return Builder.CreateICmpSLT(leftExp, rightExp, "SLTTmp");
+                    }
+                }
+                else if (exp->childPtr[1]->childPtr[0]->nodeName->compare("<=") == 0)
+                {
+                    if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        return Builder.CreateFCmpOLE(leftExp, rightExp, "OLETmp");
+                    }
+                    else
+                    {
+                        return Builder.CreateICmpSLE(leftExp, rightExp, "SLETmp");
+                    }
+                }
+                else if (exp->childPtr[1]->childPtr[0]->nodeName->compare(">") == 0)
+                {
+                    if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        return Builder.CreateFCmpOGT(leftExp, rightExp, "OGTTmp");
+                    }
+                    else
+                    {
+                        return Builder.CreateICmpSGT(leftExp, rightExp, "SGTTmp");
+                    }
+                }
+                else if (exp->childPtr[1]->childPtr[0]->nodeName->compare(">=") == 0)
+                {
+                    if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        return Builder.CreateFCmpOGE(leftExp, rightExp, "OGETmp");
+                    }
+                    else
+                    {
+                        return Builder.CreateICmpSGE(leftExp, rightExp, "SGETmp");
+                    }
+                }
+                else if (exp->childPtr[1]->childPtr[0]->nodeName->compare("==") == 0)
+                {
+                    if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        return Builder.CreateFCmpOEQ(leftExp, rightExp, "OEQTmp");
+                    }
+                    else
+                    {
+                        return Builder.CreateICmpEQ(leftExp, rightExp, "EQTmp");
+                    }
+                }
+                else if (exp->childPtr[1]->childPtr[0]->nodeName->compare("!=") == 0)
+                {
+                    if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        return Builder.CreateFCmpONE(leftExp, rightExp, "ONETmp");
+                    }
+                    else
+                    {
+                        return Builder.CreateICmpNE(leftExp, rightExp, "NETmp");
+                    }
+                }
             }
             // 逻辑运算 && ||
             else if (exp->childPtr[1]->childPtr[0]->nodeValue->compare("LOGIC") == 0)
@@ -866,10 +960,7 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
         }
     }
     // expStmt → SEMICOLON
-    else
-    {
-        return NULL;
-    }
+    return NULL;
 }
 
 /**
@@ -885,7 +976,7 @@ llvm::Value* astNode::IRBuildSelec(llvm::Function* func)
     llvm::Function*   theFunction = Builder.GetInsertBlock()->getParent();
     llvm::BasicBlock* thenBB      = llvm::BasicBlock::Create(theContext, "then", theFunction);   // 自动加到函数中
     llvm::BasicBlock* elseBB      = llvm::BasicBlock::Create(theContext, "else");
-    llvm::BasicBlock* mergeBB     = llvm::BasicBlock::Create(theContext, "ifcont");
+    llvm::BasicBlock* mergeBB     = llvm::BasicBlock::Create(theContext, "ifcond");
     llvm::BranchInst* select      = Builder.CreateCondBr(condV, thenBB, elseBB);   // 插入条件分支语句的指令
 
     // Then语句处理
@@ -983,25 +1074,61 @@ llvm::Value* astNode::IRBuildRet(llvm::Function* func)
  * @param {*}
  * @return {*}
  */
-llvm::Value* IRBuildOutput() {}
+llvm::Value* astNode::IRBuildOutput() {}
 
 /**
  * @description: Input IR生成
  * @param {*}
  * @return {*}
  */
-llvm::Value* IRBuildInput() {}
+llvm::Value* astNode::IRBuildInput() {}
 
 /**
  * @description: 二元运算隐式类型转换
- * @param {llvm::Value*} elem1
- * @param {llvm::Value*} elem2
+ * @param {llvm::Value*} elem1 待类型转换元素
+ * @param {llvm::Value*} elem2 目标类型元素
  * @return {*}
  */
-llvm::Value* typeCast(llvm::Value* elem1, llvm::Value* elem2)
+llvm::Value* astNode::typeCast(llvm::Value* elem1, llvm::Value* elem2)
 {
-    llvm::Type* type1 = elem1->getType();
-    llvm::Type* type2 = elem2->getType();
+    llvm::Type*                type1 = elem1->getType();
+    llvm::Type*                type2 = elem2->getType();
+    llvm::Instruction::CastOps op;
+    // int -> char
+    if (type1 == llvm::Type::getInt32Ty(theContext) && type2 == llvm::Type::getInt8Ty(theContext))
+    {
+        op = llvm::Instruction::CastOps::Trunc;
+    }
+    // int -> float
+    else if (type1 == llvm::Type::getInt32Ty(theContext) && type2 == llvm::Type::getFloatTy(theContext))
+    {
+        op = llvm::Instruction::CastOps::SIToFP;
+    }
+    // char -> int
+    else if (type1 == llvm::Type::getInt8Ty(theContext) && type2 == llvm::Type::getInt32Ty(theContext))
+    {
+        op = llvm::Instruction::CastOps::ZExt;
+    }
+    // char -> float
+    else if (type1 == llvm::Type::getInt8Ty(theContext) && type2 == llvm::Type::getFloatTy(theContext))
+    {
+        op = llvm::Instruction::CastOps::UIToFP;
+    }
+    // float -> int
+    else if (type1 == llvm::Type::getFloatTy(theContext) && type2 == llvm::Type::getInt32Ty(theContext))
+    {
+        op = llvm::Instruction::CastOps::FPToSI;
+    }
+    // float -> char
+    else if (type1 == llvm::Type::getFloatTy(theContext) && type2 == llvm::Type::getInt8Ty(theContext))
+    {
+        op = llvm::Instruction::CastOps::FPToUI;
+    }
+    else
+    {
+        throw("TypeCast Failed\n");
+    }
+    return Builder.CreateCast(op, elem1, type2, "typeCast");
 }
 
 /**

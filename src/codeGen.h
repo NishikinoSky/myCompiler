@@ -7,7 +7,13 @@
 #include "ast.h"
 #include "def.h"
 
-class codeGen
-{
-public:
-}
+// 记录了LLVM的核心数据结构，比如类型和常量表，不过不太需要关心它的内部
+llvm::LLVMContext theContext;
+// 用于创建LLVM指令
+llvm::IRBuilder<> Builder(theContext);
+// 用于管理函数和全局变量，类似于类c++的编译单元(单个cpp文件)
+llvm::Module* gModule = new llvm::Module("myCMM", theContext);
+// 用于记录函数的变量参数
+std::map<std::string, llvm::Value*> namedValues;
+// 函数栈, 标记当前函数
+// std::stack<llvm::Function*> funcStack;
