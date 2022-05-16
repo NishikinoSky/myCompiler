@@ -34,8 +34,8 @@ public:
     llvm::Value*                                      IRBuildSelec(llvm::Function* func);
     llvm::Value*                                      IRBuildIter(llvm::Function* func);
     llvm::Value*                                      IRBuildRet(llvm::Function* func);
-    llvm::Value*                                      IRBuildOutput();
-    llvm::Value*                                      IRBuildInput();
+    llvm::Value*                                      IRBuildPrint();
+    llvm::Value*                                      IRBuildScan();
     llvm::Value*                                      IRBuildID(llvm::Function* func);
     llvm::Value*                                      typeCast(llvm::Value* elem1, llvm::Type* type2);
 };
@@ -709,7 +709,8 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
                 // llvm::Value* const0 = Builder.getInt32(0);
                 indexVector.push_back(const0);
                 indexVector.push_back(const0);
-                llvm::Value* strPtr = Builder.CreateInBoundsGEP(gStrPtr, indexVector, "arrayPtrTmp");
+                llvm::ArrayRef<llvm::Value*> indexList(indexVector);
+                llvm::Value*                 strPtr = Builder.CreateInBoundsGEP(gStrPtr, indexList, "arrayPtrTmp");
                 return strPtr;
             }
         }
@@ -975,13 +976,13 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
                 else if (exp->childPtr[1]->childNum == 3)
                 {
                     // Look up the name in the global module table.
-                    if (exp->childPtr[0]->nodeName->compare("output"))
+                    if (exp->childPtr[0]->nodeName->compare("print"))
                     {
-                        return exp->IRBuildOutput();
+                        return exp->IRBuildPrint();
                     }
-                    else if (exp->childPtr[0]->nodeName->compare("input"))
+                    else if (exp->childPtr[0]->nodeName->compare("scan"))
                     {
-                        return exp->IRBuildInput();
+                        return exp->IRBuildScan();
                     }
 
                     llvm::Function* calleeF = gModule->getFunction(*exp->childPtr[0]->nodeName);
@@ -1106,18 +1107,20 @@ llvm::Value* astNode::IRBuildRet(llvm::Function* func)
 }
 
 /**
- * @description: output IR生成
+ * @description: Print IR生成
  * @param {*}
  * @return {*}
+ * exp → ID LPT paramList RPT
  */
-llvm::Value* astNode::IRBuildOutput() {}
+llvm::Value* astNode::IRBuildPrint() {}
 
 /**
- * @description: Input IR生成
+ * @description: Scan IR生成
  * @param {*}
  * @return {*}
+ * exp → ID LPT paramList RPT
  */
-llvm::Value* astNode::IRBuildInput() {}
+llvm::Value* astNode::IRBuildScan() {}
 
 /**
  * @description: 寻找ID的内存地址
@@ -1151,7 +1154,8 @@ llvm::Value* astNode::IRBuildID(llvm::Function* func)
                 llvm::SmallVector<llvm::Value*, 2> indexVector;
                 indexVector.push_back(const0);
                 indexVector.push_back(index);
-                return Builder.CreateInBoundsGEP(var, indexVector, "arrayTmp");
+                llvm::ArrayRef<llvm::Value*> indexList(indexVector);
+                return Builder.CreateInBoundsGEP(var, indexList, "arrayTmp");
             }
             else if (this->childPtr[1]->childNum == 2)
             {
@@ -1160,7 +1164,7 @@ llvm::Value* astNode::IRBuildID(llvm::Function* func)
         }
         else
         {
-            throw("Func call cannot be left value in exp\n");
+            throw("Func call cannot be leftvalue in exp\n");
         }
     }
     // exp → ID
