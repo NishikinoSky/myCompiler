@@ -36,7 +36,8 @@ public:
     llvm::Value*                                      IRBuildRet(llvm::Function* func);
     llvm::Value*                                      IRBuildOutput();
     llvm::Value*                                      IRBuildInput();
-    llvm::Value*                                      typeCast(llvm::Value* elem1, llvm::Value* elem2);
+    llvm::Value*                                      IRBuildID(llvm::Function* func);
+    llvm::Value*                                      typeCast(llvm::Value* elem1, llvm::Type* type2);
 };
 llvm::AllocaInst* CreateEntryBlockAlloca(llvm::Function* func, const std::string& varName, llvm::Type* type);
 
@@ -592,7 +593,6 @@ llvm::Value* astNode::IRBuildStmt(llvm::Function* func)
  * @return {*}
  * expStmt → exp SEMICOLON | SEMICOLON
  * exp → exp dbOper exp | sgOper exp | LPT exp RPT | ID | ID Array | ID funcCall | sgFactor
- * sgFactor → INT | FLOAT | CHAR | BOOL | STR
  */
 llvm::Value* astNode::IRBuildExp(llvm::Function* func)
 {
@@ -600,6 +600,8 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
     if (this->childPtr[0]->nodeValue->compare("exp") == 0)
     {
         astNode* exp = this->childPtr[0];
+
+        // sgFactor → INT | FLOAT | CHAR | BOOL | STR
         if (exp->childPtr[0]->nodeValue->compare("sgFactor") == 0)
         {
             astNode* sgFactor = exp->childPtr[0];
@@ -718,6 +720,13 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
             // 赋值语句
             if (exp->childPtr[1]->childPtr[0]->nodeValue->compare("ASSIGN") == 0)
             {
+                llvm::Value* leftExp  = exp->childPtr[0]->IRBuildID(func);
+                llvm::Value* rightExp = exp->childPtr[0]->IRBuildExp(func);
+                if (rightExp->getType() != leftExp->getType()->getPointerElementType())
+                {
+                    rightExp = this->typeCast(rightExp, leftExp->getType()->getPointerElementType());
+                }
+                return Builder.CreateStore(rightExp, leftExp);
             }
             // 比较语句
             else if (exp->childPtr[1]->childPtr[0]->nodeValue->compare("RELOP") == 0)
@@ -733,19 +742,19 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
                 {
                     if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
                     {
-                        rightExp = typeCast(rightExp, leftExp);
+                        rightExp = exp->typeCast(rightExp, leftExp->getType());
                     }
                     else if (rightExp->getType() == llvm::Type::getFloatTy(theContext))
                     {
-                        leftExp = typeCast(leftExp, rightExp);
+                        leftExp = exp->typeCast(leftExp, rightExp->getType());
                     }
                     else if (leftExp->getType() == llvm::Type::getInt32Ty(theContext))
                     {
-                        rightExp = typeCast(rightExp, leftExp);
+                        rightExp = exp->typeCast(rightExp, leftExp->getType());
                     }
                     else if (rightExp->getType() == llvm::Type::getInt32Ty(theContext))
                     {
-                        leftExp = typeCast(leftExp, rightExp);
+                        leftExp = exp->typeCast(leftExp, rightExp->getType());
                     }
                 }
 
@@ -839,6 +848,74 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
             {
                 llvm::Value* leftExp  = exp->childPtr[0]->IRBuildExp(func);
                 llvm::Value* rightExp = exp->childPtr[2]->IRBuildExp(func);
+                if (leftExp->getType() == llvm::Type::getInt1Ty(theContext) || rightExp->getType() == llvm::Type::getInt1Ty(theContext))
+                {
+                    throw("+ - * / oper not for bool\n");
+                }
+                // 类型转换 都转换成float或者int
+                if (leftExp->getType() != rightExp->getType())
+                {
+                    if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        rightExp = exp->typeCast(rightExp, leftExp->getType());
+                    }
+                    else if (rightExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        leftExp = exp->typeCast(leftExp, rightExp->getType());
+                    }
+                    else if (leftExp->getType() == llvm::Type::getInt32Ty(theContext))
+                    {
+                        rightExp = exp->typeCast(rightExp, leftExp->getType());
+                    }
+                    else if (rightExp->getType() == llvm::Type::getInt32Ty(theContext))
+                    {
+                        leftExp = exp->typeCast(leftExp, rightExp->getType());
+                    }
+                }
+                if (exp->childPtr[1]->childPtr[0]->nodeName->compare("+") == 0)
+                {
+                    if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        return Builder.CreateFAdd(leftExp, rightExp, "FAddTmp");
+                    }
+                    else
+                    {
+                        return Builder.CreateAdd(leftExp, rightExp, "AddTmp");
+                    }
+                }
+                else if (exp->childPtr[1]->childPtr[0]->nodeName->compare("-") == 0)
+                {
+                    if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        return Builder.CreateFSub(leftExp, rightExp, "FSubTmp");
+                    }
+                    else
+                    {
+                        return Builder.CreateSub(leftExp, rightExp, "SubTmp");
+                    }
+                }
+                else if (exp->childPtr[1]->childPtr[0]->nodeName->compare("*") == 0)
+                {
+                    if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        return Builder.CreateFMul(leftExp, rightExp, "FMulTmp");
+                    }
+                    else
+                    {
+                        return Builder.CreateMul(leftExp, rightExp, "MulTmp");
+                    }
+                }
+                else if (exp->childPtr[1]->childPtr[0]->nodeName->compare("/") == 0)
+                {
+                    if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                    {
+                        return Builder.CreateFDiv(leftExp, rightExp, "FDivTmp");
+                    }
+                    else
+                    {
+                        return Builder.CreateSDiv(leftExp, rightExp, "SDivTmp");
+                    }
+                }
             }
         }
         // exp → sgOper exp
@@ -873,53 +950,12 @@ llvm::Value* astNode::IRBuildExp(llvm::Function* func)
             // exp → ID
             if (exp->childNum == 1)
             {
-                //查找全局变量
-                llvm::Value* var = gModule->getGlobalVariable(*exp->childPtr[0]->nodeName, true);
-                if (var == nullptr)
-                {
-                    // 查找局部变量
-                    var = func->getValueSymbolTable()->lookup(*exp->childPtr[0]->nodeName);
-                    if (var == nullptr)
-                    {
-                        throw("Var Undeclared\n");
-                    }
-                }
-                return var;
+                return exp->IRBuildID(func);
             }
             // exp → ID Array
             else if (exp->childPtr[1]->nodeValue->compare("Array") == 0)
             {
-                // ID[]
-                if (exp->childPtr[1]->childNum == 2)
-                {
-                    //查找全局变量
-                    llvm::Value* var = gModule->getGlobalVariable(*exp->childPtr[0]->nodeName, true);
-                    if (var == nullptr)
-                    {
-                        // 查找局部变量
-                        var = func->getValueSymbolTable()->lookup(*exp->childPtr[0]->nodeName);
-                        if (var == nullptr)
-                        {
-                            throw("Var Undeclared\n");
-                        }
-                    }
-                }
-                // ID[exp]
-                else if (exp->childPtr[1]->childNum == 3)
-                {
-                    //查找全局变量
-                    llvm::Value* var = gModule->getGlobalVariable(*exp->childPtr[0]->nodeName, true);
-                    if (var == nullptr)
-                    {
-                        // 查找局部变量
-                        var = func->getValueSymbolTable()->lookup(*exp->childPtr[0]->nodeName);
-                        if (var == nullptr)
-                        {
-                            throw("Var Undeclared\n");
-                        }
-                    }
-                    llvm::Value* index = exp->childPtr[1]->childPtr[1]->IRBuildExp(func);
-                }
+                return exp->IRBuildID(func);
             }
             // exp → ID funcCall  ID()
             else if (exp->childPtr[1]->nodeValue->compare("funcCall") == 0)
@@ -1084,15 +1120,65 @@ llvm::Value* astNode::IRBuildOutput() {}
 llvm::Value* astNode::IRBuildInput() {}
 
 /**
+ * @description: 寻找ID的内存地址
+ * @param {llvm::Function*} func
+ * @return {*}
+ * exp → ID | ID Array | ID funcCall
+ * Array → LSB exp RSB | LSB RSB
+ */
+llvm::Value* astNode::IRBuildID(llvm::Function* func)
+{
+    //查找全局变量
+    llvm::Value* var = gModule->getGlobalVariable(*this->childPtr[0]->nodeName, true);
+    if (var == nullptr)
+    {
+        // 查找局部变量
+        var = func->getValueSymbolTable()->lookup(*this->childPtr[0]->nodeName);
+        if (var == nullptr)
+        {
+            throw("Var Undeclared\n");
+        }
+    }
+    if (this->childNum == 2)
+    {
+        if (this->childPtr[1]->nodeValue->compare("Array") == 0)
+        {
+            // Array → LSB exp RSB
+            if (this->childPtr[1]->childNum == 3)
+            {
+                llvm::Value*                       index  = this->childPtr[1]->childPtr[1]->IRBuildExp(func);
+                llvm::Value*                       const0 = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(theContext), 0);
+                llvm::SmallVector<llvm::Value*, 2> indexVector;
+                indexVector.push_back(const0);
+                indexVector.push_back(index);
+                return Builder.CreateInBoundsGEP(var, indexVector, "arrayTmp");
+            }
+            else if (this->childPtr[1]->childNum == 2)
+            {
+                return var;
+            }
+        }
+        else
+        {
+            throw("Func call cannot be left value in exp\n");
+        }
+    }
+    // exp → ID
+    else
+    {
+        return var;
+    }
+}
+
+/**
  * @description: 二元运算隐式类型转换
  * @param {llvm::Value*} elem1 待类型转换元素
  * @param {llvm::Value*} elem2 目标类型元素
  * @return {*}
  */
-llvm::Value* astNode::typeCast(llvm::Value* elem1, llvm::Value* elem2)
+llvm::Value* astNode::typeCast(llvm::Value* elem1, llvm::Type* type2)
 {
     llvm::Type*                type1 = elem1->getType();
-    llvm::Type*                type2 = elem2->getType();
     llvm::Instruction::CastOps op;
     // int -> char
     if (type1 == llvm::Type::getInt32Ty(theContext) && type2 == llvm::Type::getInt8Ty(theContext))
