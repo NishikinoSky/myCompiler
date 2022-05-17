@@ -5,6 +5,7 @@
  */
 #pragma once
 #include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -33,10 +34,10 @@
 
 #define ERROR -1
 #define VAR 0
-#define INT 1
-#define FLOAT 2
-#define CHAR 3
-#define BOOL 4
+#define VAR_INT 1
+#define VAR_FLOAT 2
+#define VAR_CHAR 3
+#define VAR_BOOL 4
 #define ARRAY 5
 #define ARRAY_INT 6
 #define ARRAY_FLOAT 7

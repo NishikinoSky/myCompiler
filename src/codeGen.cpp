@@ -13,8 +13,9 @@ codeGen* generator;
  */
 codeGen::codeGen()
 {
-    this->printf = this->printGen();
-    this->scanf  = this->scanGen();
+    this->gModule = new llvm::Module("myCMM", theContext);
+    this->printf  = this->printGen();
+    this->scanf   = this->scanGen();
 }
 
 /**
@@ -25,7 +26,7 @@ codeGen::codeGen()
 void codeGen::codeGenerator(astNode* root)
 {
     root->IRBuilder();
-    gModule->print(llvm::outs(), nullptr);
+    this->gModule->print(llvm::outs(), nullptr);
 }
 
 /**

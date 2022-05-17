@@ -36,19 +36,21 @@
 */
 
 #include "ast.h"
-#include "cmm.hpp"
 #include "codeGen.h"
 #include "def.h"
+#include "gramGen.hpp"
 
 extern astNode* astRoot;
 extern codeGen* generator;
+extern int      yyparse();
 
 int main()
 {
+    yyparse();
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
     llvm::InitializeNativeTargetAsmParser();
     generator = new codeGen();
-    generator->codeGenerator(root);
+    generator->codeGenerator(astRoot);
     return 0;
 }
