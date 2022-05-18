@@ -1,9 +1,7 @@
 ## myCompiler
 a simple Cminus compiler based on Cpp
 
-### 0. 测试环境
-
-Unix/Linux macOS
+macOS
 
 flex 2.6.4
 
@@ -29,7 +27,7 @@ myCompiler
 ├── test
 │ 
 └── js
-    ├──
+    ├── d3.js
     ├──
     └──
 ```
@@ -76,6 +74,12 @@ myCompiler
 
 [printf 参考](https://blog.csdn.net/xfxyy_sxfancy/article/details/49687653)
 
+[使用IRBuilder生成LLVM IR ](http://blog.silence.pink/2021/03/14/create-llvmIR-by-IRBuilder/)
+
+[王强高徒 完美熟肉](https://github.com/LittleJohnKhan/SPL-Complier)
+
+[d3.js 绘制树状图](https://juejin.cn/post/6844903998965678093)
+
 **规范：**
 
 变量定义采用小驼峰
@@ -97,6 +101,26 @@ myCompiler
 左递归化为右递归
 
 ```yacas
+Program → ExtDefList
+ExtDefList → ExtDef ExtDefList | %empty
+ExtDef → Specifier ExtDecList SEMI | Specifier FunDec Compst
+ExtDecList → VarDec | VarDec COMMA ExtDecList
+Specifier → TYPE
+VarDec → ID | ID LB INT RB | ID LB RB
+FunDec → ID LP VarList RP | ID LP RP
+VarList → ParamDec COMMA VarList | ParamDec
+ParamDec → Specifier VarDec
+CompSt → LC DefList StmtList RC
+StmtList → Stmt StmtList | %empty
+Stmt → Exp SEMI | CompSt | RETURN Exp SEMI | RETURN SEMI | BREAK SEMI | IF LP Exp RP Stmt %prec LOWER_THAN_ELSE | IF LP Exp RP Stmt ELSE Stmt | WHILE LP Exp RP Stmt
+DefList → Def DefList | %empty
+Def → Specifier DecList SEMI
+DecList → VarDec | VarDec COMMA DecList
+Exp → Exp ASSIGNOP Exp | Exp AND Exp | Exp OR Exp | Exp RELOP Exp | Exp PLUS Exp | Exp MINUS Exp | Exp STAR Exp | Exp DIV Exp | LP Exp RP | MINUS Exp | NOT Exp | ID LP Args RP | ID LP RP | ID LB Exp RB | ID LB RB | ID | INT | FLOAT | BOOL | CHAR | STRING
+Args → Exp COMMA Args | Exp
+```
+
+```yacas
 program → decList
 decList → dec decList | %empty
 dec → varDeclaration | funcDeclaration 🍺
@@ -111,8 +135,7 @@ funcDec → ID LPT paramList RPT | ID LPT RPT 🍺
 paramList → paramDec COMMA paramList | paramDec 🍺
 paramDec → typeSpecifier paramDef 🍺
 paramDef → ID | ID LSB RSB 🍺
-compoundStmt → LCB content RCB 🍺
-content → localDec stmtList | %empty 🍺
+compoundStmt → LCB localDec stmtList RCB 🍺
 localDec → varDeclaration localDec | %empty 🍺
 stmtList → stmt stmtList | %empty 🍺
 stmt → expStmt | compoundStmt | selecStmt | iterStmt | retStmt 🍺
@@ -126,6 +149,62 @@ sgOper → MINUS | NOT | PLUS
 Array → LSB exp RSB | LSB RSB
 funcCall → LPT argList RPT | LPT RPT
 argList → exp COMMA argList | exp 🍺
+sgFactor → INT | FLOAT | CHAR | BOOL | STR
+```
+
+
+
+```yacas
+======================================================= IRBuilder()
+program → decList
+decList → dec decList | %empty
+dec → varDeclaration | funcDeclaration 🍺
+=======================================================
+
+======================================================= IRBuildVar()
+varDeclaration → typeSpecifier varDecList SEMICOLON
+
+======================================================= getNodeType()
+typeSpecifier → TYPE
+=======================================================
+
+======================================================= getVarList()
+varDecList → varDef | varDef COMMA varDecList
+varDef → ID | ID LSB INT RSB
+=======================================================
+======================================================= IRBuildFunc()
+funcDeclaration → typeSpecifier funcDec compoundStmt 🍺
+funcDec → ID LPT paramList RPT | ID LPT RPT 🍺
+=======================================================
+======================================================= getParamList()
+paramList → paramDec COMMA paramList | paramDec 🍺
+paramDec → typeSpecifier paramDef 🍺
+paramDef → ID | ID LSB RSB 🍺
+=======================================================
+======================================================= IRBuildCompoundStmt()
+compoundStmt → LCB content RCB 🍺
+content → localDec stmtList | %empty 🍺
+localDec → varDeclaration localDec | %empty 🍺
+stmtList → stmt stmtList | %empty 🍺
+=======================================================
+======================================================= IRBuildStmt()
+stmt → expStmt | compoundStmt | selecStmt | iterStmt | retStmt 🍺
+expStmt → exp SEMICOLON | SEMICOLON
+=======================================================
+
+selecStmt → IF LPT exp RPT stmt %prec LOWER_THAN_ELSE | IF LPT exp RPT stmt ELSE stmt 🍺
+iterStmt → WHILE LPT exp RPT stmt 🍺
+retStmt → RETURN exp SEMICOLON | RETURN SEMICOLON | BREAK SEMICOLON 🍺
+
+======================================================= IRBuildExp()
+exp → exp dbOper exp | sgOper exp | LPT exp RPT | ID | ID Array | ID funcCall | sgFactor
+dbOper → PLUS | MINUS | MULTI | DIV | RELOP | ASSIGN | AND | OR
+sgOper → MINUS | NOT | PLUS
+Array → LSB exp RSB | LSB RSB
+funcCall → LPT argList RPT | LPT RPT
+======================================================= getArgList()
+argList → exp COMMA argList | exp 🍺
+=======================================================
 sgFactor → INT | FLOAT | CHAR | BOOL | STR
 ```
 
