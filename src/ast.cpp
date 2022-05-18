@@ -1314,23 +1314,23 @@ llvm::Value* astNode::IRBuildPrint(bool isPrintln, bool isPrintf)
  */
 llvm::Value* astNode::IRBuildScan()
 {
-    std::string               formatStr = "";
-    std::vector<llvm::Value*> scanArgs;
-    astNode*                  node = this->childPtr[1]->childPtr[1];
+    std::string                formatStr = "";
+    std::vector<llvm::Value*>* scanArgs  = new std::vector<llvm::Value*>;
+    astNode*                   node      = this->childPtr[1]->childPtr[1];
     while (true)
     {
         if (node->childNum == 1)
         {
-            scanArgs.push_back(node->childPtr[0]->IRBuildID());
+            scanArgs->push_back(node->childPtr[0]->IRBuildID());
             break;
         }
         else
         {
-            scanArgs.push_back(node->childPtr[0]->IRBuildID());
+            scanArgs->push_back(node->childPtr[0]->IRBuildID());
             node = node->childPtr[2];
         }
     }
-    for (auto argValue : scanArgs)
+    for (auto argValue : *scanArgs)
     {
         if (argValue->getType()->getPointerElementType() == Builder.getInt32Ty())
         {
@@ -1357,8 +1357,9 @@ llvm::Value* astNode::IRBuildScan()
             throw("Invalid type to read.\n");
         }
     }
-    scanArgs.insert(scanArgs.begin(), Builder.CreateGlobalStringPtr(formatStr));
-    return Builder.CreateCall(generator->scanf, scanArgs, "scanf");
+    scanArgs->insert(scanArgs->begin(), Builder.CreateGlobalStringPtr(formatStr));
+    llvm::ArrayRef<llvm::Value*> argList(*scanArgs);
+    return Builder.CreateCall(generator->scanf, argList, "scanf");
 }
 
 /**

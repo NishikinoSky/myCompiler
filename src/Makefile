@@ -22,7 +22,6 @@ build:
 	$(CC) -g $(LLVM_INCLU) $(LLVM_LIB) -lLLVM ./*.cpp -o diana
 
 test:
-	@echo "\n\n****** test1 print 1 ******"
 	cat ../test/test1/test1.cmm | ./diana > ../test/test1/test1.ll
 	$(LLVM_AS) ../test/test1/test1.ll -o ../test/test1/test1.bc	
 	$(CC) ../test/test1/test1.bc -o ../test/test1/test1
