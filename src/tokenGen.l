@@ -11,7 +11,7 @@ IF if
 RETURN return
 WHILE while
 BREAK break
-TYPE "int"|"float"|"char"|"bool"
+TYPE "int"|"float"|"char"|"bool"|"void"
 BOOL "true"|"false"
 
 /*identifiers*/

@@ -43,7 +43,6 @@
 #define ARRAY_FLOAT 7
 #define ARRAY_CHAR 8
 #define ARRAY_BOOL 9
-#define VOID 10
-#define FUNC 11
+#define VAR_VOID 10
 
 #define DEBUG 0

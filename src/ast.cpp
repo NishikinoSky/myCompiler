@@ -114,6 +114,10 @@ int astNode::getNodeType(astNode* node)
         {
             return VAR_BOOL;
         }
+        else if (node->childPtr[0]->nodeName->compare("void") == 0)
+        {
+            return VAR_VOID;
+        }
     }
     else
     {
@@ -143,6 +147,9 @@ llvm::Type* astNode::getLLVMType(int type, int size)
         break;
     case VAR_BOOL:
         return llvm::Type::getInt1Ty(theContext);
+        break;
+    case VAR_VOID:
+        return llvm::Type::getVoidTy(theContext);
         break;
     case ARRAY_INT:
         if (size)
@@ -524,6 +531,11 @@ llvm::Value* astNode::IRBuildFunc()
             arg->setName(it->second);
             it++;
         }
+        // int index = 0;
+        // for (auto& arg : func->args())
+        // {
+        //     arg.setName(paramList->at(index++).second);
+        // }
     }
     // 函数体
     // 创建函数的代码块
@@ -1049,20 +1061,19 @@ llvm::Value* astNode::IRBuildExp()
             else if (this->childPtr[1]->childNum == 3)
             {
                 // Look up the name in the global module table.
-                if (this->childPtr[0]->nodeName->compare("print"))
+                if (this->childPtr[0]->nodeName->compare("print") == 0)
                 {
                     return this->IRBuildPrint(false, false);
                 }
-                else if (this->childPtr[0]->nodeName->compare("println"))
+                else if (this->childPtr[0]->nodeName->compare("println") == 0)
                 {
                     return this->IRBuildPrint(true, false);
                 }
-                else if (this->childPtr[0]->nodeName->compare("printf"))
+                else if (this->childPtr[0]->nodeName->compare("printf") == 0)
                 {
                     return this->IRBuildPrint(false, true);
                 }
-
-                else if (this->childPtr[0]->nodeName->compare("scan"))
+                else if (this->childPtr[0]->nodeName->compare("scan") == 0)
                 {
                     return this->IRBuildScan();
                 }
@@ -1072,8 +1083,9 @@ llvm::Value* astNode::IRBuildExp()
                 {
                     throw("Function Undeclared\n");
                 }
-                std::vector<llvm::Value*>* argsV = this->childPtr[1]->childPtr[1]->getArgList();
-                return Builder.CreateCall(calleeF, *argsV, "callTmp");
+                std::vector<llvm::Value*>*   argsV = this->childPtr[1]->childPtr[1]->getArgList();
+                llvm::ArrayRef<llvm::Value*> argsList(*argsV);
+                return Builder.CreateCall(calleeF, argsList, "callTmp");
             }
         }
     }
@@ -1279,7 +1291,7 @@ llvm::Value* astNode::IRBuildPrint(bool isPrintln, bool isPrintf)
             throw("Invalid type to write.");
         }
     }
-    if (!isPrintln)
+    if (isPrintln)
     {
         formatStr += "\n";
     }
