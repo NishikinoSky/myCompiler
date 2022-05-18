@@ -14,19 +14,19 @@ static llvm::IRBuilder<> Builder(theContext);
 
 // 用于记录函数的变量参数
 // std::map<std::string, llvm::Value*> namedValues;
-// 函数栈, 标记当前函数
-// std::stack<llvm::Function*> funcStack;
 
 class codeGen
 {
 public:
     // 用于管理函数和全局变量，类似于类c++的编译单元(单个cpp文件)
-    llvm::Module*   gModule;
-    llvm::Function* printf;
-    llvm::Function* scanf;
-    llvm::Function* printGen();
-    llvm::Function* scanGen();
-    void            codeGenerator(astNode* root);
+    llvm::Module* gModule;
+    // 函数栈, 标记当前函数
+    std::stack<llvm::Function*> funcStack;
+    llvm::Function*             printf;
+    llvm::Function*             scanf;
+    llvm::Function*             printGen();
+    llvm::Function*             scanGen();
+    void                        codeGenerator(astNode* root);
     codeGen();
     ~codeGen();
 };

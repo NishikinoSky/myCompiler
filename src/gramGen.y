@@ -55,7 +55,6 @@
 %type <asTree> compoundStmt
 %type <asTree> paramList
 %type <asTree> paramDec
-%type <asTree> paramDef
 %type <asTree> localDec
 %type <asTree> stmtList
 %type <asTree> stmt
@@ -126,7 +125,11 @@ varDef:
     }
     | ID LSB INT RSB {
         $$ = new astNode("", "varDef", 4, $1, $2, $3, $4);
-    };
+    }
+    | ID LSB RSB {
+        $$ = new astNode("", "varDef", 3, $1, $2, $3);
+    }
+    ;
 
 funcDeclaration:
     typeSpecifier funcDec compoundStmt {
@@ -150,16 +153,8 @@ paramList:
     };
 
 paramDec:
-    typeSpecifier paramDec {
+    typeSpecifier varDef {
         $$ = new astNode("", "paramDec", 2, $1, $2);
-    };
-
-paramDef:
-    ID {
-        $$ = new astNode("", "paramDef", 1, $1);
-    }
-    | ID LSB RSB {
-        $$ = new astNode("", "paramDef", 3, $1, $2, $3);
     };
 
 compoundStmt:
