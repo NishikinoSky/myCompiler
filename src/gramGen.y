@@ -56,7 +56,6 @@
 %type <asTree> paramList
 %type <asTree> paramDec
 %type <asTree> paramDef
-%type <asTree> content
 %type <asTree> localDec
 %type <asTree> stmtList
 %type <asTree> stmt
@@ -76,9 +75,9 @@
 %nonassoc ELSE
 
 %left PLUS MINUS MULTI DIV
-%left RELOP ASSIGN LOGIC
+%left RELOP LOGIC
 %left LPT RPT LSB RSB
-%right NOT
+%right NOT ASSIGN
 
 %%
 program:
@@ -164,16 +163,8 @@ paramDef:
     };
 
 compoundStmt:
-    LCB content RCB {
-        $$ = new astNode("", "compoundStmt", 3, $1, $2, $3);
-    };
-
-content:
-    localDec stmtList {
-        $$ = new astNode("", "content", 2, $1, $2);
-    }
-    | %empty {
-        $$ = NULL;
+    LCB localDec stmtList RCB {
+        $$ = new astNode("", "compoundStmt", 4, $1, $2, $3, $4);
     };
 
 localDec:
