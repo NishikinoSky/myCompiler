@@ -22,11 +22,13 @@ public:
     llvm::Module* gModule;
     // 函数栈, 标记当前函数
     std::stack<llvm::Function*> funcStack;
-    llvm::Function*             printf;
-    llvm::Function*             scanf;
-    llvm::Function*             printGen();
-    llvm::Function*             scanGen();
-    void                        codeGenerator(astNode* root);
+    // 块栈，用于多重循环break
+    std::stack<llvm::BasicBlock*> blockStack;
+    llvm::Function*               printf;
+    llvm::Function*               scanf;
+    llvm::Function*               printGen();
+    llvm::Function*               scanGen();
+    void                          codeGenerator(astNode* root);
     codeGen();
     ~codeGen();
 };

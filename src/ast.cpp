@@ -6,9 +6,8 @@
 #include "ast.h"
 #include "codeGen.h"
 
-astNode*          astRoot;
-llvm::BasicBlock* breakBB;
-extern codeGen*   generator;
+astNode*        astRoot;
+extern codeGen* generator;
 
 /**
  * @description: 词法分析构建leaf
@@ -1155,7 +1154,7 @@ llvm::Value* astNode::IRBuildIter()
     llvm::BasicBlock* condBB      = llvm::BasicBlock::Create(theContext, "cond", theFunction);
     llvm::BasicBlock* bodyBB      = llvm::BasicBlock::Create(theContext, "body", theFunction);
     llvm::BasicBlock* endBB       = llvm::BasicBlock::Create(theContext, "end", theFunction);
-    breakBB                       = endBB;
+    generator->blockStack.push(endBB);
     Builder.CreateBr(condBB);   // 跳转到条件分支
 
     // condBB基本块
@@ -1178,7 +1177,7 @@ llvm::Value* astNode::IRBuildIter()
 
     // endBB基本块
     Builder.SetInsertPoint(endBB);
-
+    generator->blockStack.pop();
     return select;
 }
 
@@ -1204,7 +1203,7 @@ llvm::Value* astNode::IRBuildRet()
     // retStmt → BREAK SEMICOLON
     else if (this->childPtr[0]->nodeValue->compare("BREAK") == 0)
     {
-        return Builder.CreateBr(breakBB);
+        return Builder.CreateBr(generator->blockStack.top());
     }
     else
     {
@@ -1314,6 +1313,9 @@ llvm::Value* astNode::IRBuildPrint(bool isPrintln, bool isPrintf)
  */
 llvm::Value* astNode::IRBuildScan()
 {
+#if DEBUG
+    std::cout << "Scan Build Start..." << std::endl;
+#endif
     std::string                formatStr = "";
     std::vector<llvm::Value*>* scanArgs  = new std::vector<llvm::Value*>;
     astNode*                   node      = this->childPtr[1]->childPtr[1];
@@ -1330,6 +1332,9 @@ llvm::Value* astNode::IRBuildScan()
             node = node->childPtr[2];
         }
     }
+#if DEBUG
+    std::cout << "argList get..." << std::endl;
+#endif
     for (auto argValue : *scanArgs)
     {
         if (argValue->getType()->getPointerElementType() == Builder.getInt32Ty())
@@ -1359,6 +1364,9 @@ llvm::Value* astNode::IRBuildScan()
     }
     scanArgs->insert(scanArgs->begin(), Builder.CreateGlobalStringPtr(formatStr));
     llvm::ArrayRef<llvm::Value*> argList(*scanArgs);
+#if DEBUG
+    std::cout << "Scan Build ok..." << std::endl;
+#endif
     return Builder.CreateCall(generator->scanf, argList, "scanf");
 }
 
