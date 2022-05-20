@@ -22,18 +22,16 @@ build:
 	$(CC) -g $(LLVM_INCLU) $(LLVM_LIB) -lLLVM ./*.cpp -o diana
 
 test:
-	cat ../test/test1/test1.cmm | ./diana > ../test/test1/test1.ll
-	$(LLVM_AS) ../test/test1/test1.ll -o ../test/test1/test1.bc	
-	$(CC) ../test/test1/test1.bc -o ../test/test1/test1
-	../test/test1/test1
+	cat ../test/test.cmm | ./diana > ../test/test.ll
+	$(LLVM_AS) ../test/test.ll -o ../test/test.bc	
+	$(CC) ../test/test.bc -o ../test/test
+	../test/test
 
 clean:
 	$(RM) -rf $(OBJS) gramGen.cpp gramGen.hpp diana tokenGen.cpp
-	$(RM) -f ../test/*.ll ../test/*.bc ../test/test1/test1
-	$(RM) -f ../test/test1/*.bc ../test/test1/*.ll
+	$(RM) -f ../test/*.ll ../test/*.bc ../test/test
 
 cleantest:
-	$(RM) -f ../test/*.ll ../test/*.bc ../test/test1/test1
-	$(RM) -f ../test/test1/*.bc ../test/test1/*.ll
+	$(RM) -f ../test/*.ll ../test/*.bc ../test/test
 
 
