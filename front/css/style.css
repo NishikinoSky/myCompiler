@@ -315,37 +315,6 @@ footer span {
 	z-index: 99;
 }
 
-/* #txt {
-	outline-style: none;
-	border-radius: 10px;
-	float: left;
-	width: 888px;
-	height: 572px;
-	padding: 5px;
-	border: 0;
-	margin: 20px;
-	margin-bottom: 0px;
-	padding: 20px;
-	color: rgb(52, 21, 21);
-	font-size: 18px;
-	font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif; */
-/* font-weight: bolder; */
-/* letter-spacing: 1.5px;
-	border-color: #66afe9;
-	outline: 0;
-	-webkit-box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075), 0 0 8px rgba(102, 175, 233, .6);
-	box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075), 0 0 8px rgba(102, 175, 233, .6);
-	background-color: rgb(255, 255, 255);
-	outline: none;
-	background-color: rgb(255, 212, 212);
-} */
-
-/* #txt::-webkit-input-placeholder,
-#txt textarea::-webkit-input-placeholder {
-	color: rgb(65, 19, 19);
-	font-size: 10px;
-} */
-
 #closeBox {
 	float: right;
 	width: 32px;
@@ -360,63 +329,6 @@ footer span {
 	background-color: rgba(0, 0, 0, 0);
 	border-radius: 50%;
 }
-
-/* 
-.notes li {
-	position: relative;
-	float: left;
-	width: 85px;
-	height: 85px;
-	border: 0;
-	margin: 20px;
-	margin-bottom: 25px;
-	padding: 5px;
-	color: #000;
-	font-size: 10px;
-	line-height: 18px;
-	text-align: center;
-	letter-spacing: 2px;
-	background-color: #ccc;
-	outline: none;
-	background-color: rgba(0, 0, 0, .3);
-}
-
-.notes li a {
-	position: absolute;
-	width: 95px;
-	height: 20px;
-	top: 113px;
-	left: 0;
-	outline: none;
-	border: 0;
-	color: #fff;
-	text-align: center;
-	cursor: pointer;
-	background-color: rgba(0, 0, 0, .3);
-
-}
-
-.notes li a:hover {
-	color: red !important;
-}
-
-.notes li p {
-	position: absolute;
-	width: 95px;
-	height: 20px;
-	left: 0;
-	top: -14px;
-	text-align: center;
-	font-size: 6px;
-	letter-spacing: 1px;
-
-} */
-
-/* .btm #add:hover,
-.notes li a:hover {
-	background-color: rgba(0, 0, 0, .5) !important;
-} */
-
 
 footer ul {
 	position: absolute;
