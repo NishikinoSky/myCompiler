@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="Designer" content="Skyyyy">
+    <meta name="Description" content="myIDE">
+
+    <link rel="stylesheet" href="css/style.css" type="text/css">
+    <link rel="stylesheet" href="css/timer.css" type="text/css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="css/bar.css">
+    <!-- <link rel="shortcut icon" href="diana.ico"> -->
+    <!-- jQuery google & baidu CDN -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+    <script src="https://apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js"></script>
+
+    <script src="nodeModules/codemirror/lib/codemirror.js"></script>
+    <link rel="stylesheet" href="nodeModules/codemirror/lib/codemirror.css" rel="external nofollow" />
+
+    <link rel="stylesheet" href="nodeModules/codemirror/theme/monokai.css">
+    <link rel="stylesheet" href="nodeModules/codemirror/theme/solarized.css">
+    <link rel="stylesheet" href="nodeModules/codemirror/theme/duotone-light.css">
+    <link rel="stylesheet" href="nodeModules/codemirror/theme/ayu-mirage.css">
+    <link rel="stylesheet" href="nodeModules/codemirror/theme/dracula.css" rel="external nofollow" />
+    <link rel="stylesheet" href="nodeModules/codemirror/addon/fold/foldgutter.css" rel="external nofollow" />
+
+    <script src="nodeModules/codemirror/addon/selection/active-line.js"></script>
+    <script src="nodeModules/codemirror/addon/selection/selection-pointer.js"></script>
+    <script src="nodeModules/codemirror/addon/edit/matchbrackets.js"></script>
+    <script src="nodeModules/codemirror/addon/fold/foldcode.js"></script>
+    <script src="nodeModules/codemirror/addon/fold/foldgutter.js"></script>
+    <script src="nodeModules/codemirror/addon/fold/brace-fold.js"></script>
+    <script src="nodeModules/codemirror/addon/fold/comment-fold.js"></script>
+
+    <script src="nodeModules/codemirror/mode/clike/clike.js"></script>
+    <!-- <script src="codemirror/mode/javascript/javascript.js"></script> -->
+    <!-- golang -->
+    <script src="nodeModules/codemirror/mode/go/go.js"></script>
+    <script src="nodeModules/codemirror/clike.js"></script>
+
+    <script src="https://kit.fontawesome.com/b65ab8d8e3.js" crossorigin="anonymous"></script>
+
+    <title>myDiana</title>
+</head>
+
+<body id="bgid" onload="insertBg()" style="overflow:hidden">
+    <header>
+        <!-- <img src="images/background/grider.png"
+            style="position:absolute;left:650px;top:0px;width:100px;height:730px;" />
+        <img src="images/background/window.png" style="position:absolute;left:-478px;top:-240px;" /> -->
+        <div class="tabbar">
+            <ul>
+                <li class="item active">
+                    <a onclick="addFocus()">
+                        <span class="icon">
+                            <i class="fa-solid fa-code" aria-hidden="true"></i>
+                        </span>
+                        <span class="text">Code</span>
+                    </a>
+                </li>
+                <li class="item">
+                    <!-- <input type="file" name="upload" id="upload" accept="text/plain" /> -->
+                    <input id="fileInput" type="file" name="fileInput" style="position:absolute;top:-100px;" />
+                    <a onclick="clickOpen()">
+                        <span class="icon">
+                            <i class="fas fa-external-link" aria-hidden="true"></i>
+                        </span>
+                        <span class="text">Open</span>
+                    </a>
+                </li>
+                <li class="item">
+                    <!-- <input id="btnSave" type="button" value="另存为" onclick="clickSave()" /> -->
+                    <a onclick="clickSave()">
+                        <span class="icon">
+                            <!-- <i class="fa-solid fa-circle-arrow-down" aria-hidden="true"></i> -->
+                            <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                        </span>
+                        <span class="text">Save</span>
+                    </a>
+                </li>
+                <li class="item">
+                    <a onclick="clickRun()">
+                        <span class="icon">
+                            <!-- <i class="fa-solid fa-angles-right" aria-hidden="true"></i> -->
+                            <i class="fa-solid fa-jet-fighter" aria-hidden="true"></i>
+                        </span>
+                        <span class="text">Run</span>
+                    </a>
+                </li>
+                <li class="item">
+                    <a onclick="clickTerminal()">
+                        <span class="icon">
+                            <i class="fas fa-terminal" aria-hidden="true"></i>
+                        </span>
+                        <span class="text">Terminal</span>
+                    </a>
+                </li>
+                <li class="item">
+                    <a href="https://github.com/NishikinoSky" target="_blank">
+                        <span class="icon">
+                            <i class="fa-brands fa-github" aria-hidden="true"></i>
+                        </span>
+                        <span class="text">About</span>
+                    </a>
+                </li>
+                <div class="active-bg"></div>
+                <img src="images/barsearch/dianaDance.png" onmouseover="this.src='images/barsearch/dianaHenshin.png'"
+                    onmouseout="this.src='images/barsearch/dianaDance.png'"
+                    style="position:absolute;left:-150%;top:5%;width: 60px;height: 60px;" />
+
+
+                <div class="searchbox">
+                    <form action="http://www.google.com/search" method="get" target="_blank">
+                        <input type="search" name="q" id="seaid" placeholder="Heil, diana!" autofocus="autofocus"
+                            autocomplete="off">
+                        <!-- <form action="http://www.google.com/search" target="_blank" method="get">
+                        <input type="text" name="q" /> -->
+                        <input type="submit" id="subid" value="">
+                    </form>
+                    <!-- <form action="http://www.google.com/search" target="_blank" method="get">
+                        <input type="text" name="q" />
+                        <input class="button" type="submit" value="google">
+                    </form> -->
+
+                </div>
+                <div class="leftbox" id="ltbox">
+                    <em><img src="images/bartime/clock.svg" alt=""></em>
+                    <span id="lttime"></span>
+                </div>
+                <div class="rightbox" id="rtbox"></div>
+            </ul>
+
+        </div>
+
+    </header>
+    <div class="container">
+        <ul>
+        </ul>
+    </div>
+
+    <footer>
+        <button onclick="getFocus()" class="topbtn"><i class="fas fa-chevron-circle-up"></i></button>
+        <button id="note"><i class="fas fa-book"></i></button>
+        <ul>
+            <li><a href="https://www.bilibili.com/" target="_blank"><img src="images/barfoot/bilibili.svg" alt=""></a>
+            </li>
+            <li><a href="http://course.zju.edu.cn/zh-cn/" target="_blank"><img src="images/barfoot/zju.svg" alt=""></a>
+            </li>
+            <li><a href="https://github.com/" target="_blank"><img src="images/barfoot/github.svg" alt=""></a></li>
+            <li><a href="https://gitee.com/" target="_blank"><img src="images/barfoot/gitee.svg" alt=""></a></li>
+        </ul>
+    </footer>
+
+    <div id="" class="btm">
+        <textarea id="txt" name="txt"></textarea>
+        <!-- <script>
+            // codemirror构建代码框
+        </script> -->
+
+        <input type="button" id="closeBox" onclick="addFocus()" value="">
+        <ul class="notes"></ul>
+    </div>
+
+    <!-- <div style="width:500px;height:400px;border:1px solid red;position:relative;"> -->
+    <img src="images/barbody/flower.png" style="position:absolute;left:800px;top:-233px;" />
+    <img src="images/barbody/dianaSit1.png" onmouseover="this.src='images/barbody/dianaSit2.png'"
+        onmouseout="this.src='images/barbody/dianaSit1.png'" style="position:absolute;left:800px;top: 267px;" />
+    <img src="images/barbody/suga.png" onmouseover="this.src='images/barbody/diana.png'"
+        onmouseout="this.src='images/barbody/suga.png'"
+        style="position:absolute;left:1300px;top: 150px;width:100px;height:100px;" />
+    </div>
+
+    <script src="js/index.js"></script>
+
+</body>
+
+</html>
