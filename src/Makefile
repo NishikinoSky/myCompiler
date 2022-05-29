@@ -19,17 +19,18 @@ LLVM_INCLU	= -I ${LLVM_DIR}/include
 build:
 	flex -o tokenGen.cpp tokenGen.l
 	bison -d -o gramGen.cpp gramGen.y
-	$(CC) -g $(LLVM_INCLU) $(LLVM_LIB) -lLLVM ./*.cpp -o diana
+	$(CC) $(LLVM_INCLU) $(LLVM_LIB) -lLLVM ./*.cpp -o diana
 
 test:
 	cat ../test/test.cmm | ./diana > ../test/test.ll
 	$(LLVM_AS) ../test/test.ll -o ../test/test.bc	
 	$(CC) ../test/test.bc -o ../test/test
 	../test/test
-
+	../test/test > ../test/result.txt
 clean:
-	$(RM) -rf $(OBJS) gramGen.cpp gramGen.hpp diana tokenGen.cpp
+	$(RM) -f $(OBJS) gramGen.cpp gramGen.hpp diana tokenGen.cpp
 	$(RM) -f ../test/*.ll ../test/*.bc ../test/test
+	$(RM) -f astVis/treeData.json
 
 cleantest:
 	$(RM) -f ../test/*.ll ../test/*.bc ../test/test

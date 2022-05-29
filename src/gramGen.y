@@ -3,7 +3,6 @@
     #include "ast.h"
     int yylex(void);
     void yyerror(char *);
-    extern int mistakeNum;
     extern astNode* astRoot;
 %}
 
@@ -11,6 +10,7 @@
 {
     class astNode* asTree;
 }
+
 /*terminals*/
 %token <asTree> ELSE
 %token <asTree> IF

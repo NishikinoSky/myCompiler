@@ -20,11 +20,13 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/ValueSymbolTable.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdarg>
+#include <fstream>
 #include <iostream>
 #include <stdio.h>
 #include <string.h>
@@ -38,11 +40,7 @@
 #define VAR_FLOAT 2
 #define VAR_CHAR 3
 #define VAR_BOOL 4
-#define ARRAY 5
-#define ARRAY_INT 6
-#define ARRAY_FLOAT 7
-#define ARRAY_CHAR 8
-#define ARRAY_BOOL 9
-#define VAR_VOID 10
+#define VAR_VOID 5
+#define ARRAY 6
 
 #define DEBUG 0

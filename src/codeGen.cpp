@@ -18,7 +18,7 @@ codeGen::codeGen()
 #endif
     this->gModule = new llvm::Module("myCMM", theContext);
     this->printf  = this->printGen();
-    this->scanf   = this->scanGen();
+    // this->scanf   = this->scanGen();
 }
 
 /**
@@ -50,22 +50,10 @@ codeGen::~codeGen()
 llvm::Function* codeGen::printGen()
 {
     std::vector<llvm::Type*> printfArgs;
-    printfArgs.push_back(Builder.getInt8Ty()->getPointerTo());
+    printfArgs.push_back(theBuilder.getInt8Ty()->getPointerTo());
     llvm::ArrayRef<llvm::Type*> argsRef(printfArgs);
-    llvm::FunctionType*         printfType = llvm::FunctionType::get(Builder.getInt32Ty(), argsRef, true);
+    llvm::FunctionType*         printfType = llvm::FunctionType::get(theBuilder.getInt32Ty(), argsRef, true);
     llvm::Function*             printfFunc = llvm::Function::Create(printfType, llvm::Function::ExternalLinkage, llvm::Twine("printf"), gModule);
     printfFunc->setCallingConv(llvm::CallingConv::C);
     return printfFunc;
-}
-
-/**
- * @description: scan函数的声明
- * @return {*}
- */
-llvm::Function* codeGen::scanGen()
-{
-    llvm::FunctionType* scanfType = llvm::FunctionType::get(Builder.getInt32Ty(), true);
-    llvm::Function*     scanfFunc = llvm::Function::Create(scanfType, llvm::Function::ExternalLinkage, llvm::Twine("scanf"), gModule);
-    scanfFunc->setCallingConv(llvm::CallingConv::C);
-    return scanfFunc;
 }

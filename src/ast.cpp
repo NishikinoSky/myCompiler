@@ -16,18 +16,11 @@ extern codeGen* generator;
  * @param {int} lineIndex 节点所在行数
  * @return {*}
  */
-astNode::astNode(char* nodeName, std::string nodeValue, int lineIndex)
+astNode::astNode(char* nodeName, std::string nodeValue)
 {
-#if DEBUG
-    std::cout << "astLeaf initialization start... name: " << nodeName << " value: " << nodeValue << std::endl;
-#endif
     this->nodeName  = new std::string(nodeName);
     this->nodeValue = new std::string(nodeValue);
-    this->lineIndex = lineIndex;
     this->childNum  = 0;
-#if DEBUG
-    std::cout << "astLeaf initialization finish, name: " << *this->nodeName << " value: " << *this->nodeValue << std::endl;
-#endif
 }
 
 /**
@@ -39,9 +32,6 @@ astNode::astNode(char* nodeName, std::string nodeValue, int lineIndex)
  */
 astNode::astNode(std::string nodeName, std::string nodeValue, int childNum, ...)
 {
-#if DEBUG
-    std::cout << "astNode initialization start..." << std::endl;
-#endif
     this->nodeName  = new std::string(nodeName);
     this->nodeValue = new std::string(nodeValue);
     this->childNum  = childNum;
@@ -52,19 +42,14 @@ astNode::astNode(std::string nodeName, std::string nodeValue, int childNum, ...)
     {
         for (int i = 0; i < childNum; i++)
         {
-            astNode* child = va_arg(args, astNode*);
-            this->childPtr.push_back(child);
+            this->childPtr.push_back(va_arg(args, astNode*));
         }
-        this->lineIndex = this->childPtr[0]->lineIndex;
     }
     else
     {
         throw("childNum Error\n");
     }
     va_end(args);
-#if DEBUG
-    std::cout << "astNode initialization finish, name: " << *this->nodeName << " value: " << *this->nodeValue << std::endl;
-#endif
 }
 
 /**
@@ -129,70 +114,85 @@ int astNode::getNodeType(astNode* node)
  * @description: 根据type得到llvmtype, 调用llvm::Type中的api
  * @param {int} type 由getValueType返回的类型
  * @param {int} size 数组大小, 非数组或指针为0, 区分ID[](ptr)与ID[int](array)并且作为llvm::ArrayType::get参数
+ * @param {bool} isArray 判断是否为数组
  * @return llvm::Type::{*}
  */
-llvm::Type* astNode::getLLVMType(int type, int size)
+llvm::Type* astNode::getLLVMType(int type, int size, bool isArray)
 {
+
     switch (type)
     {
     case VAR_INT:
-        return llvm::Type::getInt32Ty(theContext);
+        if (!isArray)
+        {
+            return theBuilder.getInt32Ty();
+        }
+        else
+        {
+            if (size)
+            {
+                return llvm::ArrayType::get(theBuilder.getInt32Ty(), size);
+            }
+            else
+            {
+                return llvm::Type::getInt32PtrTy(theContext);
+            }
+        }
         break;
     case VAR_FLOAT:
-        return llvm::Type::getFloatTy(theContext);
+        if (!isArray)
+        {
+            return theBuilder.getFloatTy();
+        }
+        else
+        {
+            if (size)
+            {
+                return llvm::ArrayType::get(theBuilder.getFloatTy(), size);
+            }
+            else
+            {
+                return llvm::Type::getFloatPtrTy(theContext);
+            }
+        }
         break;
     case VAR_CHAR:
-        return llvm::Type::getInt8Ty(theContext);
+        if (!isArray)
+        {
+            return theBuilder.getInt8Ty();
+        }
+        else
+        {
+            if (size)
+            {
+                return llvm::ArrayType::get(theBuilder.getInt8Ty(), size);
+            }
+            else
+            {
+                return llvm::Type::getInt8PtrTy(theContext);
+            }
+        }
         break;
     case VAR_BOOL:
-        return llvm::Type::getInt1Ty(theContext);
-        break;
-    case VAR_VOID:
-        return llvm::Type::getVoidTy(theContext);
-        break;
-    case ARRAY_INT:
-        if (size)
+        if (!isArray)
         {
-            return llvm::ArrayType::get(llvm::Type::getInt32Ty(theContext), size);
+            return theBuilder.getInt1Ty();
         }
         else
         {
-            return llvm::Type::getInt32PtrTy(theContext);
-        }
-        break;
-    case ARRAY_FLOAT:
-        if (size)
-        {
-            return llvm::ArrayType::get(llvm::Type::getFloatTy(theContext), size);
-        }
-        else
-        {
-            return llvm::Type::getFloatPtrTy(theContext);
-        }
-        break;
-    case ARRAY_CHAR:
-        if (size)
-        {
-            return llvm::ArrayType::get(llvm::Type::getInt8Ty(theContext), size);
-        }
-        else
-        {
-            return llvm::Type::getInt8PtrTy(theContext);
-        }
-        break;
-    case ARRAY_BOOL:
-        if (size)
-        {
-            return llvm::ArrayType::get(llvm::Type::getInt1Ty(theContext), size);
-        }
-        else
-        {
-            return llvm::Type::getInt1PtrTy(theContext);
+            if (size)
+            {
+                return llvm::ArrayType::get(theBuilder.getInt1Ty(), size);
+            }
+            else
+            {
+                return llvm::Type::getInt1PtrTy(theContext);
+            }
         }
         break;
     default:
         // void
-        return llvm::Type::getVoidTy(theContext);
+        return theBuilder.getVoidTy();
         break;
     }
 }
@@ -206,9 +206,6 @@ llvm::Type* astNode::getLLVMType(int type, int size)
  */
 std::vector<std::pair<int, std::string>>* astNode::getVarList()
 {
-#if DEBUG
-    std::cout << "geting varlist...." << std::endl;
-#endif
     astNode* node = this;
     if (node->nodeValue->compare("varDecList") == 0)
     {
@@ -220,17 +217,11 @@ std::vector<std::pair<int, std::string>>* astNode::getVarList()
             if (node->childPtr[0]->childNum == 1)
             {
                 varListPtr->push_back(make_pair(VAR, *node->childPtr[0]->childPtr[0]->nodeName));
-#if DEBUG
-                std::cout << "get ID" << std::endl;
-#endif
             }
             // ID LSB RSB
             else if (node->childPtr[0]->childNum == 3)
             {
                 varListPtr->push_back(make_pair(ARRAY, *node->childPtr[0]->childPtr[0]->nodeName));
-#if DEBUG
-                std::cout << "get ID LSB RSB" << std::endl;
-#endif
             }
             // ID LSB INT RSB
             else if (node->childPtr[0]->childNum == 4)
@@ -245,16 +236,10 @@ std::vector<std::pair<int, std::string>>* astNode::getVarList()
             // node->childPtr[2] = varDecList
             if (node->childNum == 3)
             {
-#if DEBUG
-                std::cout << "node->next" << std::endl;
-#endif
                 node = node->childPtr[2];
             }
             else
             {
-#if DEBUG
-                std::cout << "break" << std::endl;
-#endif
                 break;
             }
         }
@@ -286,12 +271,12 @@ std::vector<std::pair<llvm::Type*, std::string>>* astNode::getParamList()
             // ID
             if (node->childPtr[0]->childPtr[1]->childNum == 1)
             {
-                paramListPtr->push_back(make_pair(getLLVMType(getNodeType(node->childPtr[0]->childPtr[0]), 0), *node->childPtr[0]->childPtr[1]->childPtr[0]->nodeName));
+                paramListPtr->push_back(make_pair(getLLVMType(getNodeType(node->childPtr[0]->childPtr[0]), 0, false), *node->childPtr[0]->childPtr[1]->childPtr[0]->nodeName));
             }
             // ID LSB RSB
             else if (node->childPtr[0]->childPtr[1]->childNum == 3)
             {
-                paramListPtr->push_back(make_pair(getLLVMType(ARRAY + getNodeType(node->childPtr[0]->childPtr[0]), 0), *node->childPtr[0]->childPtr[1]->childPtr[0]->nodeName));
+                paramListPtr->push_back(make_pair(getLLVMType(getNodeType(node->childPtr[0]->childPtr[0]), 0, true), *node->childPtr[0]->childPtr[1]->childPtr[0]->nodeName));
             }
             else
             {
@@ -365,26 +350,40 @@ llvm::Value* astNode::IRBuilder()
 #if DEBUG
     std::cout << "[DEBUG] IRBuilder() start ===================================================" << std::endl;
 #endif
-    if (this->nodeValue->compare("dec") == 0)
+    if (this->nodeValue->compare("program") == 0)
+    {
+        this->childPtr[0]->IRBuilder();
+    }
+    else if (this->nodeValue->compare("decList") == 0)
+    {
+        if (this->childNum == 2)
+        {
+            if (this->childPtr[0] != nullptr)
+            {
+                this->childPtr[0]->IRBuilder();
+            }
+
+            if (this->childPtr[1] != nullptr)
+            {
+                this->childPtr[1]->IRBuilder();
+            }
+        }
+    }
+    else if (this->nodeValue->compare("dec") == 0)
     {
         if (this->childPtr[0]->nodeValue->compare("varDeclaration") == 0)
         {
-            return this->childPtr[0]->IRBuildVar();
+            return this->childPtr[0]->IRBuildVar(true);
         }
         else if (this->childPtr[0]->nodeValue->compare("funcDeclaration") == 0)
         {
             return this->childPtr[0]->IRBuildFunc();
         }
     }
-    for (int i = 0; i < this->childNum; i++)
-    {
-        if (this->childPtr[i] != nullptr)
-            this->childPtr[i]->IRBuilder();
-    }
 #if DEBUG
     std::cout << "[DEBUG] IRBuilder() finish ==================================================" << std::endl;
 #endif
-    return 0;
+    return NULL;
 }
 
 /**
@@ -396,15 +395,10 @@ llvm::Value* astNode::IRBuilder()
  * varDecList → varDef | varDef COMMA varDecList
  * varDef → ID | ID LSB INT RSB | ID LSB RSB
  */
-llvm::Value* astNode::IRBuildVar()
+llvm::Value* astNode::IRBuildVar(bool isGlobal)
 {
-#if DEBUG
-    std::cout << "start Build Var...." << std::endl;
-#endif
+
     std::vector<std::pair<int, std::string>>* varList = this->childPtr[1]->getVarList();
-#if DEBUG
-    std::cout << "varList get...." << std::endl;
-#endif
     // std::vector<std::pair<int, std::string>>::iterator it;
     // for (it = varList->begin(); it != varList->end(); it++)
     for (auto it : *varList)
@@ -413,23 +407,17 @@ llvm::Value* astNode::IRBuildVar()
         int         arraySize = 0;
         if (it.first == VAR)
         {
-            llvmType = getLLVMType(getNodeType(this->childPtr[0]), 0);
+            llvmType = getLLVMType(getNodeType(this->childPtr[0]), 0, false);
         }
         // array
         else
         {
             arraySize = it.first - ARRAY;
-            llvmType  = getLLVMType(getNodeType(this->childPtr[0]) + ARRAY, arraySize);
+            llvmType  = getLLVMType(getNodeType(this->childPtr[0]), arraySize, true);
         }
-#if DEBUG
-        std::cout << "llvmType get...." << std::endl;
-#endif
         // 全局变量
-        if (generator->funcStack.empty())
+        if (isGlobal)
         {
-#if DEBUG
-            std::cout << "start Build Gobal Var...." << std::endl;
-#endif
             // 全局变量重名
             if (generator->gModule->getGlobalVariable(it.second, true) != nullptr)
             {
@@ -474,11 +462,11 @@ llvm::Value* astNode::IRBuildVar()
 #if DEBUG
             std::cout << "start Build Local Var...." << std::endl;
 #endif
-            if (generator->funcStack.top()->getValueSymbolTable()->lookup(it.second) != nullptr)
+            if (theBuilder.GetInsertBlock()->getParent()->getValueSymbolTable()->lookup(it.second) != nullptr)
             {
                 throw("LocalVar Name Duplicated.\n");
             }
-            llvm::AllocaInst* varAlloca = CreateEntryBlockAlloca(generator->funcStack.top(), it.second, llvmType);
+            llvm::AllocaInst* varAlloca = CreateEntryBlockAlloca(theBuilder.GetInsertBlock()->getParent(), it.second, llvmType);
         }
     }
     return NULL;
@@ -494,10 +482,10 @@ llvm::Value* astNode::IRBuildVar()
 llvm::Value* astNode::IRBuildFunc()
 {
     // 返回值类型
-    llvm::Type* retType = getLLVMType(getNodeType(this->childPtr[0]), 0);
+    llvm::Type* retType = getLLVMType(getNodeType(this->childPtr[0]), 0, false);
     // 参数类型
-    std::vector<llvm::Type*>                          funcArgs;
-    std::vector<std::pair<llvm::Type*, std::string>>* paramList = nullptr;
+    std::vector<llvm::Type*>                          funcArgType;
+    std::vector<std::pair<llvm::Type*, std::string>>* paramList = new std::vector<std::pair<llvm::Type*, std::string>>;
     // funcDec → ID LPT paramList RPT
     if (this->childPtr[1]->childNum == 4)
     {
@@ -506,21 +494,21 @@ llvm::Value* astNode::IRBuildFunc()
         // for (std::vector<std::pair<llvm::Type*, std::string>>::iterator it = paramList->begin(); it != paramList->end(); it++)
         for (auto it : *paramList)
         {
-            funcArgs.push_back(it.first);
+            funcArgType.push_back(it.first);
         }
     }
-    // funcDec → ID LPT RPT
-    // else
-    // {
-    //     paramList = nullptr;
-    // }
+    else
+    {
+        // funcDec → ID LPT RPT
+        paramList = nullptr;
+    }
 
     // 根据返回值类型和参数类型得到函数类型
-    llvm::FunctionType* funcType = llvm::FunctionType::get(retType, funcArgs, /*isVarArg*/ false);
-    // llvm::Function* func = llvm::cast<llvm::Function>(generator->gModule->getOrInsertFunction(*this->childPtr[1]->childPtr[0]->nodeName, funcType));
+    llvm::FunctionType* funcType = llvm::FunctionType::get(retType, funcArgType, /*isVarArg*/ false);
+    // llvm::Function*     func     = cast<llvm::Function>(generator->gModule->getOrInsertFunction(*this->childPtr[1]->childPtr[0]->nodeName, funcType));
     llvm::Function* func = llvm::Function::Create(funcType, llvm::GlobalValue::ExternalLinkage, *this->childPtr[1]->childPtr[0]->nodeName, generator->gModule);
-    generator->funcStack.push(func);
-    //  存储参数（获取参数的引用）
+
+    //   存储参数（获取参数的引用）
     if (paramList != nullptr)
     {
         std::vector<std::pair<llvm::Type*, std::string>>::iterator it = paramList->begin();
@@ -530,18 +518,12 @@ llvm::Value* astNode::IRBuildFunc()
             arg->setName(it->second);
             it++;
         }
-        // int index = 0;
-        // for (auto& arg : func->args())
-        // {
-        //     arg.setName(paramList->at(index++).second);
-        // }
     }
     // 函数体
     // 创建函数的代码块
     llvm::BasicBlock* entry = llvm::BasicBlock::Create(theContext, "entry", func);
-    Builder.SetInsertPoint(entry);
+    theBuilder.SetInsertPoint(entry);
     this->childPtr[2]->IRBuildCompoundStmt();
-    generator->funcStack.pop();
     return func;
 }
 
@@ -565,7 +547,7 @@ llvm::Value* astNode::IRBuildCompoundStmt()
         astNode* localDec = this->childPtr[1];
         while (localDec != nullptr && localDec->childNum == 2)
         {
-            localDec->childPtr[0]->IRBuildVar();
+            localDec->childPtr[0]->IRBuildVar(false);
             localDec = localDec->childPtr[1];
         }
 
@@ -640,21 +622,11 @@ llvm::Value* astNode::IRBuildExp()
     // exp → ID
     if (this->childPtr[0]->nodeValue->compare("ID") == 0 && this->childNum == 1)
     {
-        // llvm::Value* var = this->IRBuildID(func);
         //查找局部变量
-        llvm::Value* var = generator->funcStack.top()->getValueSymbolTable()->lookup(*this->childPtr[0]->nodeName);
-        if (var == nullptr)
+        llvm::Value* var = this->IRBuildID();
+        if (var->getType()->isPointerTy())
         {
-            // 查找全局变量
-            var = generator->gModule->getGlobalVariable(*this->childPtr[0]->nodeName, true);
-            if (var == nullptr)
-            {
-                throw("Var Undeclared\n");
-            }
-        }
-        if (var->getType()->isPointerTy() && !(var->getType()->getPointerElementType()->isArrayTy()))
-        {
-            return Builder.CreateLoad(var->getType()->getPointerElementType(), var, "tmpVar");
+            return theBuilder.CreateLoad(var->getType()->getPointerElementType(), var, "tmpVar");
         }
         else
         {
@@ -668,70 +640,69 @@ llvm::Value* astNode::IRBuildExp()
         if (sgFactor->childPtr[0]->nodeValue->compare("INT") == 0)
         {
             int num = std::stoi(*sgFactor->childPtr[0]->nodeName);
-            return Builder.getInt32(num);
+            return llvm::ConstantInt::get(theBuilder.getInt32Ty(), num);
         }
         else if (sgFactor->childPtr[0]->nodeValue->compare("FLOAT") == 0)
         {
             float num = std::stof(*sgFactor->childPtr[0]->nodeName);
-            return llvm::ConstantFP::get(Builder.getFloatTy(), llvm::APFloat(num));
+            return llvm::ConstantFP::get(theBuilder.getFloatTy(), llvm::APFloat(num));
         }
         else if (sgFactor->childPtr[0]->nodeValue->compare("CHAR") == 0)
         {
             std::string::iterator it = sgFactor->childPtr[0]->nodeName->begin() + 1;
             //  非转义字符
-            // if (*it != '\\')
-            if (sgFactor->childPtr[0]->nodeName->size() == 3)
+            if (*it != '\\')
             {
-                return Builder.getInt8(*it);
+                return theBuilder.getInt8(*it);
             }
             // 转义字符
             else if (sgFactor->childPtr[0]->nodeName->compare("'\\a'") == 0)
             {
-                return Builder.getInt8('\a');
+                return theBuilder.getInt8('\a');
             }
             else if (sgFactor->childPtr[0]->nodeName->compare("'\\b'") == 0)
             {
-                return Builder.getInt8('\b');
+                return theBuilder.getInt8('\b');
             }
             else if (sgFactor->childPtr[0]->nodeName->compare("'\\f'") == 0)
             {
-                return Builder.getInt8('\f');
+                return theBuilder.getInt8('\f');
             }
             else if (sgFactor->childPtr[0]->nodeName->compare("'\\n'") == 0)
             {
-                return Builder.getInt8('\n');
+                return theBuilder.getInt8('\n');
             }
             else if (sgFactor->childPtr[0]->nodeName->compare("'\\r'") == 0)
             {
-                return Builder.getInt8('\r');
+                return theBuilder.getInt8('\r');
             }
             else if (sgFactor->childPtr[0]->nodeName->compare("'\\t'") == 0)
             {
-                return Builder.getInt8('\t');
+                return theBuilder.getInt8('\t');
             }
             else if (sgFactor->childPtr[0]->nodeName->compare("'\\v'") == 0)
             {
-                return Builder.getInt8('\v');
+                return theBuilder.getInt8('\v');
             }
             else if (sgFactor->childPtr[0]->nodeName->compare("'\\\\'") == 0)
             {
-                return Builder.getInt8('\\');
+                return theBuilder.getInt8('\\');
             }
             else if (sgFactor->childPtr[0]->nodeName->compare("'\\?'") == 0)
             {
-                return Builder.getInt8('\?');
+                return theBuilder.getInt8('\?');
             }
             else if (sgFactor->childPtr[0]->nodeName->compare("'\\''") == 0)
             {
-                return Builder.getInt8('\'');
+                return theBuilder.getInt8('\'');
             }
             else if (sgFactor->childPtr[0]->nodeName->compare("'\\\"'") == 0)
             {
-                return Builder.getInt8('\"');
+                return theBuilder.getInt8('\"');
             }
             else if (sgFactor->childPtr[0]->nodeName->compare("'\\0'") == 0)
             {
-                return Builder.getInt8('\0');
+                return theBuilder.getInt8('\0');
             }
             else
             {
@@ -742,11 +713,11 @@ llvm::Value* astNode::IRBuildExp()
         {
             if (sgFactor->childPtr[0]->nodeName->compare("true") == 0)
             {
-                return Builder.getInt1(true);
+                return theBuilder.getInt1(true);
             }
             else if (sgFactor->childPtr[0]->nodeName->compare("false") == 0)
             {
-                return Builder.getInt1(false);
+                return theBuilder.getInt1(false);
             }
             else
             {
@@ -767,11 +738,10 @@ llvm::Value* astNode::IRBuildExp()
                                                     /*Name=*/"strConstTmp");
             llvm::SmallVector<llvm::Value*, 2> indexVector;
             llvm::Value*                       const0 = llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(theContext), 0);
-            // llvm::Value* const0 = Builder.getInt32(0);
             indexVector.push_back(const0);
             indexVector.push_back(const0);
             llvm::ArrayRef<llvm::Value*> indexList(indexVector);
-            llvm::Value*                 strPtr = Builder.CreateInBoundsGEP(gStrPtr, indexList, "arrayPtrTmp");
+            llvm::Value*                 strPtr = theBuilder.CreateGEP(gStrPtr, indexList, "arrayPtrTmp");
             return strPtr;
         }
     }
@@ -788,33 +758,33 @@ llvm::Value* astNode::IRBuildExp()
             {
                 rightExp = this->typeCast(rightExp, leftExp->getType()->getPointerElementType());
             }
-            return Builder.CreateStore(rightExp, leftExp);
+            return theBuilder.CreateStore(rightExp, leftExp);
         }
         // 比较语句
         else if (this->childPtr[1]->childPtr[0]->nodeValue->compare("RELOP") == 0)
         {
             llvm::Value* leftExp  = this->childPtr[0]->IRBuildExp();
             llvm::Value* rightExp = this->childPtr[2]->IRBuildExp();
-            if (leftExp->getType() == llvm::Type::getInt1Ty(theContext) || rightExp->getType() == llvm::Type::getInt1Ty(theContext))
+            if (leftExp->getType() == theBuilder.getInt1Ty() || rightExp->getType() == theBuilder.getInt1Ty())
             {
                 throw("Relop oper not for bool\n");
             }
             // 类型转换 都转换成float或者int
             if (leftExp->getType() != rightExp->getType())
             {
-                if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                if (leftExp->getType() == theBuilder.getFloatTy())
                 {
                     rightExp = this->typeCast(rightExp, leftExp->getType());
                 }
-                else if (rightExp->getType() == llvm::Type::getFloatTy(theContext))
+                else if (rightExp->getType() == theBuilder.getFloatTy())
                 {
                     leftExp = this->typeCast(leftExp, rightExp->getType());
                 }
-                else if (leftExp->getType() == llvm::Type::getInt32Ty(theContext))
+                else if (leftExp->getType() == theBuilder.getInt32Ty())
                 {
                     rightExp = this->typeCast(rightExp, leftExp->getType());
                 }
-                else if (rightExp->getType() == llvm::Type::getInt32Ty(theContext))
+                else if (rightExp->getType() == theBuilder.getInt32Ty())
                 {
                     leftExp = this->typeCast(leftExp, rightExp->getType());
                 }
@@ -822,68 +792,68 @@ llvm::Value* astNode::IRBuildExp()
 
             if (this->childPtr[1]->childPtr[0]->nodeName->compare("<") == 0)
             {
-                if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                if (leftExp->getType() == theBuilder.getFloatTy())
                 {
-                    return Builder.CreateFCmpOLT(leftExp, rightExp, "OLTTmp");
+                    return theBuilder.CreateFCmpOLT(leftExp, rightExp, "OLTTmp");
                 }
                 else
                 {
-                    return Builder.CreateICmpSLT(leftExp, rightExp, "SLTTmp");
+                    return theBuilder.CreateICmpSLT(leftExp, rightExp, "SLTTmp");
                 }
             }
             else if (this->childPtr[1]->childPtr[0]->nodeName->compare("<=") == 0)
             {
-                if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                if (leftExp->getType() == theBuilder.getFloatTy())
                 {
-                    return Builder.CreateFCmpOLE(leftExp, rightExp, "OLETmp");
+                    return theBuilder.CreateFCmpOLE(leftExp, rightExp, "OLETmp");
                 }
                 else
                 {
-                    return Builder.CreateICmpSLE(leftExp, rightExp, "SLETmp");
+                    return theBuilder.CreateICmpSLE(leftExp, rightExp, "SLETmp");
                 }
             }
             else if (this->childPtr[1]->childPtr[0]->nodeName->compare(">") == 0)
             {
-                if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                if (leftExp->getType() == theBuilder.getFloatTy())
                 {
-                    return Builder.CreateFCmpOGT(leftExp, rightExp, "OGTTmp");
+                    return theBuilder.CreateFCmpOGT(leftExp, rightExp, "OGTTmp");
                 }
                 else
                 {
-                    return Builder.CreateICmpSGT(leftExp, rightExp, "SGTTmp");
+                    return theBuilder.CreateICmpSGT(leftExp, rightExp, "SGTTmp");
                 }
             }
             else if (this->childPtr[1]->childPtr[0]->nodeName->compare(">=") == 0)
             {
-                if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                if (leftExp->getType() == theBuilder.getFloatTy())
                 {
-                    return Builder.CreateFCmpOGE(leftExp, rightExp, "OGETmp");
+                    return theBuilder.CreateFCmpOGE(leftExp, rightExp, "OGETmp");
                 }
                 else
                 {
-                    return Builder.CreateICmpSGE(leftExp, rightExp, "SGETmp");
+                    return theBuilder.CreateICmpSGE(leftExp, rightExp, "SGETmp");
                 }
             }
             else if (this->childPtr[1]->childPtr[0]->nodeName->compare("==") == 0)
             {
-                if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                if (leftExp->getType() == theBuilder.getFloatTy())
                 {
-                    return Builder.CreateFCmpOEQ(leftExp, rightExp, "OEQTmp");
+                    return theBuilder.CreateFCmpOEQ(leftExp, rightExp, "OEQTmp");
                 }
                 else
                 {
-                    return Builder.CreateICmpEQ(leftExp, rightExp, "EQTmp");
+                    return theBuilder.CreateICmpEQ(leftExp, rightExp, "EQTmp");
                 }
             }
             else if (this->childPtr[1]->childPtr[0]->nodeName->compare("!=") == 0)
             {
-                if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                if (leftExp->getType() == theBuilder.getFloatTy())
                 {
-                    return Builder.CreateFCmpONE(leftExp, rightExp, "ONETmp");
+                    return theBuilder.CreateFCmpONE(leftExp, rightExp, "ONETmp");
                 }
                 else
                 {
-                    return Builder.CreateICmpNE(leftExp, rightExp, "NETmp");
+                    return theBuilder.CreateICmpNE(leftExp, rightExp, "NETmp");
                 }
             }
         }
@@ -892,17 +862,17 @@ llvm::Value* astNode::IRBuildExp()
         {
             llvm::Value* leftExp  = this->childPtr[0]->IRBuildExp();
             llvm::Value* rightExp = this->childPtr[2]->IRBuildExp();
-            if (leftExp->getType() != llvm::Type::getInt1Ty(theContext) || rightExp->getType() != llvm::Type::getInt1Ty(theContext))
+            if (leftExp->getType() != theBuilder.getInt1Ty() || rightExp->getType() != theBuilder.getInt1Ty())
             {
                 throw("Logic oper only for bool\n");
             }
             if (this->childPtr[1]->childPtr[0]->nodeName->compare("&&") == 0)
             {
-                return Builder.CreateAnd(leftExp, rightExp, "andTmp");
+                return theBuilder.CreateAnd(leftExp, rightExp, "andTmp");
             }
             else if (this->childPtr[1]->childPtr[0]->nodeName->compare("||") == 0)
             {
-                return Builder.CreateOr(leftExp, rightExp, "orTmp");
+                return theBuilder.CreateOr(leftExp, rightExp, "orTmp");
             }
         }
         // + - * /
@@ -910,72 +880,72 @@ llvm::Value* astNode::IRBuildExp()
         {
             llvm::Value* leftExp  = this->childPtr[0]->IRBuildExp();
             llvm::Value* rightExp = this->childPtr[2]->IRBuildExp();
-            if (leftExp->getType() == llvm::Type::getInt1Ty(theContext) || rightExp->getType() == llvm::Type::getInt1Ty(theContext))
+            if (leftExp->getType() == theBuilder.getInt1Ty() || rightExp->getType() == theBuilder.getInt1Ty())
             {
                 throw("+ - * / oper not for bool\n");
             }
             // 类型转换 都转换成float或者int
             if (leftExp->getType() != rightExp->getType())
             {
-                if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                if (leftExp->getType() == theBuilder.getFloatTy())
                 {
                     rightExp = this->typeCast(rightExp, leftExp->getType());
                 }
-                else if (rightExp->getType() == llvm::Type::getFloatTy(theContext))
+                else if (rightExp->getType() == theBuilder.getFloatTy())
                 {
                     leftExp = this->typeCast(leftExp, rightExp->getType());
                 }
-                else if (leftExp->getType() == llvm::Type::getInt32Ty(theContext))
+                else if (leftExp->getType() == theBuilder.getInt32Ty())
                 {
                     rightExp = this->typeCast(rightExp, leftExp->getType());
                 }
-                else if (rightExp->getType() == llvm::Type::getInt32Ty(theContext))
+                else if (rightExp->getType() == theBuilder.getInt32Ty())
                 {
                     leftExp = this->typeCast(leftExp, rightExp->getType());
                 }
             }
             if (this->childPtr[1]->childPtr[0]->nodeName->compare("+") == 0)
             {
-                if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                if (leftExp->getType() == theBuilder.getFloatTy())
                 {
-                    return Builder.CreateFAdd(leftExp, rightExp, "FAddTmp");
+                    return theBuilder.CreateFAdd(leftExp, rightExp, "FAddTmp");
                 }
                 else
                 {
-                    return Builder.CreateAdd(leftExp, rightExp, "AddTmp");
+                    return theBuilder.CreateAdd(leftExp, rightExp, "AddTmp");
                 }
             }
             else if (this->childPtr[1]->childPtr[0]->nodeName->compare("-") == 0)
             {
-                if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                if (leftExp->getType() == theBuilder.getFloatTy())
                 {
-                    return Builder.CreateFSub(leftExp, rightExp, "FSubTmp");
+                    return theBuilder.CreateFSub(leftExp, rightExp, "FSubTmp");
                 }
                 else
                 {
-                    return Builder.CreateSub(leftExp, rightExp, "SubTmp");
+                    return theBuilder.CreateSub(leftExp, rightExp, "SubTmp");
                 }
             }
             else if (this->childPtr[1]->childPtr[0]->nodeName->compare("*") == 0)
             {
-                if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                if (leftExp->getType() == theBuilder.getFloatTy())
                 {
-                    return Builder.CreateFMul(leftExp, rightExp, "FMulTmp");
+                    return theBuilder.CreateFMul(leftExp, rightExp, "FMulTmp");
                 }
                 else
                 {
-                    return Builder.CreateMul(leftExp, rightExp, "MulTmp");
+                    return theBuilder.CreateMul(leftExp, rightExp, "MulTmp");
                 }
             }
             else if (this->childPtr[1]->childPtr[0]->nodeName->compare("/") == 0)
             {
-                if (leftExp->getType() == llvm::Type::getFloatTy(theContext))
+                if (leftExp->getType() == theBuilder.getFloatTy())
                 {
-                    return Builder.CreateFDiv(leftExp, rightExp, "FDivTmp");
+                    return theBuilder.CreateFDiv(leftExp, rightExp, "FDivTmp");
                 }
                 else
                 {
-                    return Builder.CreateSDiv(leftExp, rightExp, "SDivTmp");
+                    return theBuilder.CreateSDiv(leftExp, rightExp, "SDivTmp");
                 }
             }
         }
@@ -987,20 +957,20 @@ llvm::Value* astNode::IRBuildExp()
         if (this->childPtr[0]->childPtr[0]->nodeValue->compare("MINUS") == 0)
         {
             llvm::Value* tmp = this->childPtr[1]->IRBuildExp();
-            if (tmp->getType() == llvm::Type::getInt1Ty(theContext))
+            if (tmp->getType() == theBuilder.getInt1Ty())
             {
                 throw("NOT not for bool\n");
             }
-            return Builder.CreateNeg(tmp, "negTmp");
+            return theBuilder.CreateNeg(tmp, "negTmp");
         }
         else if (this->childPtr[0]->childPtr[0]->nodeValue->compare("NOT") == 0)
         {
             llvm::Value* tmp = this->childPtr[1]->IRBuildExp();
-            if (tmp->getType() != llvm::Type::getInt1Ty(theContext))
+            if (tmp->getType() != theBuilder.getInt1Ty())
             {
                 throw("! only for bool\n");
             }
-            return Builder.CreateNot(tmp, "notTmp");
+            return theBuilder.CreateNot(tmp, "notTmp");
         }
         else if (this->childPtr[0]->childPtr[0]->nodeValue->compare("PLUS") == 0)
         {
@@ -1015,22 +985,13 @@ llvm::Value* astNode::IRBuildExp()
     // exp → ID Array | ID funcCall
     if (this->childPtr[0]->nodeValue->compare("ID") == 0 && this->childNum == 2)
     {
-        // exp → ID
-        //         if (this->childNum == 1)
-        //         {
-        // #if DEBUG
-        //             std::cout << "[DEBUG] exp->ID " << std::endl;
-        // #endif
-        //             return this->IRBuildID(func);
-        //         }
-
         // exp → ID Array
         if (this->childPtr[1]->nodeValue->compare("Array") == 0)
         {
             if (this->childPtr[1]->childNum == 3)
             {
                 llvm::Value* arrayPtr = this->IRBuildID();
-                return Builder.CreateLoad(arrayPtr->getType()->getPointerElementType(), arrayPtr, "arrayTmp");
+                return theBuilder.CreateLoad(arrayPtr->getType()->getPointerElementType(), arrayPtr, "arrayTmp");
             }
             else
             {
@@ -1040,7 +1001,7 @@ llvm::Value* astNode::IRBuildExp()
         // exp → ID funcCall  ID()
         else if (this->childPtr[1]->nodeValue->compare("funcCall") == 0)
         {
-// funcCall → ()
+            // funcCall → ()
 #if DEBUG
             std::cout << "funcCall func()..." << std::endl;
 #endif
@@ -1054,7 +1015,7 @@ llvm::Value* astNode::IRBuildExp()
                 }
                 llvm::SmallVector<llvm::Value*, 2> indexVector;
                 llvm::ArrayRef<llvm::Value*>       indexList(indexVector);
-                return Builder.CreateCall(calleeF, indexList, "callTmp");
+                return theBuilder.CreateCall(calleeF, indexList, "callTmp");
             }
             // funcCall → (argList)
             else if (this->childPtr[1]->childNum == 3)
@@ -1084,7 +1045,7 @@ llvm::Value* astNode::IRBuildExp()
                 }
                 std::vector<llvm::Value*>*   argsV = this->childPtr[1]->childPtr[1]->getArgList();
                 llvm::ArrayRef<llvm::Value*> argsList(*argsV);
-                return Builder.CreateCall(calleeF, argsList, "callTmp");
+                return theBuilder.CreateCall(calleeF, argsList, "callTmp");
             }
         }
     }
@@ -1094,7 +1055,7 @@ llvm::Value* astNode::IRBuildExp()
 
 /**
  * @description: if相关语句IR生成
- * @param {llvm::Function*} func 当前所在函数
+ * @param
  * @return {*}
  * selecStmt → IF LPT exp RPT stmt %prec LOWER_THAN_ELSE | IF LPT exp RPT stmt ELSE stmt
  */
@@ -1103,80 +1064,76 @@ llvm::Value* astNode::IRBuildSelec()
 #if DEBUG
     std::cout << "start if building..." << std::endl;
 #endif
-    llvm::Value* condV = this->childPtr[2]->IRBuildExp();
-    llvm::Value* thenV = nullptr;
-    llvm::Value* elseV = nullptr;
-    condV              = Builder.CreateICmpNE(condV, llvm::ConstantInt::get(llvm::Type::getInt1Ty(theContext), 0, true), "ifCond");
-    // llvm::Function*   theFunction = Builder.GetInsertBlock()->getParent();
-    llvm::Function*   theFunction = generator->funcStack.top();
+    llvm::Value*      thenV       = nullptr;
+    llvm::Value*      elseV       = nullptr;
+    llvm::Value*      condV       = theBuilder.CreateICmpEQ(this->childPtr[2]->IRBuildExp(), llvm::ConstantInt::get(theBuilder.getInt1Ty(), 1), "ifCond");
+    llvm::Function*   theFunction = theBuilder.GetInsertBlock()->getParent();
     llvm::BasicBlock* thenBB      = llvm::BasicBlock::Create(theContext, "then", theFunction);   // 自动加到函数中
     llvm::BasicBlock* elseBB      = llvm::BasicBlock::Create(theContext, "else");
     llvm::BasicBlock* mergeBB     = llvm::BasicBlock::Create(theContext, "ifcond");
-    llvm::BranchInst* select      = Builder.CreateCondBr(condV, thenBB, elseBB);   // 插入条件分支语句的指令
+    llvm::BranchInst* select      = theBuilder.CreateCondBr(condV, thenBB, elseBB);   // 插入条件分支语句的指令
 #if DEBUG
     std::cout << "start then building..." << std::endl;
 #endif
     // Then语句处理
-    Builder.SetInsertPoint(thenBB);
+    theBuilder.SetInsertPoint(thenBB);
     thenV = this->childPtr[4]->IRBuildStmt();
-    Builder.CreateBr(mergeBB);           // 插入跳转到Merge分支的指令
-    thenBB = Builder.GetInsertBlock();   // 获取Then语句的出口
+    theBuilder.CreateBr(mergeBB);           // 插入跳转到Merge分支的指令
+    thenBB = theBuilder.GetInsertBlock();   // 获取Then语句的出口
 #if DEBUG
     std::cout << "then built" << std::endl;
 #endif
 
     // Else语句处理
     theFunction->getBasicBlockList().push_back(elseBB);   // 添加到函数中去
-    Builder.SetInsertPoint(elseBB);
+    theBuilder.SetInsertPoint(elseBB);
     // selecStmt → IF LPT exp RPT stmt ELSE stmt
     if (this->childNum == 7)
     {
         elseV = this->childPtr[6]->IRBuildStmt();
     }
-    Builder.CreateBr(mergeBB);           // 插入跳转到Merge分支的指令
-    elseBB = Builder.GetInsertBlock();   // 获取Else语句的出口
+    theBuilder.CreateBr(mergeBB);           // 插入跳转到Merge分支的指令
+    elseBB = theBuilder.GetInsertBlock();   // 获取Else语句的出口
 
     theFunction->getBasicBlockList().push_back(mergeBB);
-    Builder.SetInsertPoint(mergeBB);
+    theBuilder.SetInsertPoint(mergeBB);
 
     return select;
 }
 
 /**
  * @description: while相关语句生成
- * @param {llvm::Function*} func 当前所在函数
+ * @param
  * @return {*}
  * iterStmt → WHILE LPT exp RPT stmt
  */
 llvm::Value* astNode::IRBuildIter()
 {
-    llvm::Function*   theFunction = generator->funcStack.top();
+    llvm::Function*   theFunction = theBuilder.GetInsertBlock()->getParent();
     llvm::BasicBlock* condBB      = llvm::BasicBlock::Create(theContext, "cond", theFunction);
     llvm::BasicBlock* bodyBB      = llvm::BasicBlock::Create(theContext, "body", theFunction);
     llvm::BasicBlock* endBB       = llvm::BasicBlock::Create(theContext, "end", theFunction);
     generator->blockStack.push(endBB);
-    Builder.CreateBr(condBB);   // 跳转到条件分支
+    theBuilder.CreateBr(condBB);   // 跳转到条件分支
 
     // condBB基本块
-    Builder.SetInsertPoint(condBB);
-    llvm::Value* condV = this->childPtr[2]->IRBuildExp();
-    // condV                    = Builder.CreateFCmpONE(condV, llvm::ConstantFP::get(theContext, llvm::APFloat(0.0)), "whileCond");
-    condV                    = Builder.CreateICmpNE(condV, llvm::ConstantInt::get(llvm::Type::getInt1Ty(theContext), 0, true), "whileCond");
-    llvm::BranchInst* select = Builder.CreateCondBr(condV, bodyBB, endBB);   // 插入分支语句的指令
-    condBB                   = Builder.GetInsertBlock();                     // 获取条件语句的出口
+    theBuilder.SetInsertPoint(condBB);
+    llvm::Value*      condV  = theBuilder.CreateICmpEQ(this->childPtr[2]->IRBuildExp(), llvm::ConstantInt::get(theBuilder.getInt1Ty(), 1), "whileCond");
+    llvm::BranchInst* select = theBuilder.CreateCondBr(condV, bodyBB, endBB);   // 插入分支语句的指令
+    condBB                   = theBuilder.GetInsertBlock();                     // 获取条件语句的出口
 
     // bodyBB基本块
-    Builder.SetInsertPoint(bodyBB);
+    theBuilder.SetInsertPoint(bodyBB);
     this->childPtr[4]->IRBuildStmt();
     // llvm::Value* bodyV = this->childPtr[4]->IRBuildStmt(func);
     // if (bodyV == nullptr)   // break;
     // {
-    //     Builder.CreateBr(endBB);   // 跳转到endBB
+    //     theBuilder.CreateBr(endBB);   // 跳转到endBB
     // }
-    Builder.CreateBr(condBB);   // 跳转到condBB
+    theBuilder.CreateBr(condBB);   // 跳转到condBB
 
     // endBB基本块
-    Builder.SetInsertPoint(endBB);
+    theBuilder.SetInsertPoint(endBB);
     generator->blockStack.pop();
     return select;
 }
@@ -1193,17 +1150,17 @@ llvm::Value* astNode::IRBuildRet()
     if (this->childNum == 3 && this->childPtr[0]->nodeValue->compare("RETURN") == 0)
     {
         llvm::Value* ret = this->childPtr[1]->IRBuildExp();
-        return Builder.CreateRet(ret);
+        return theBuilder.CreateRet(ret);
     }
     // retStmt → RETURN SEMICOLON
     else if (this->childPtr[0]->nodeValue->compare("RETURN") == 0 && this->childNum == 2)
     {
-        return Builder.CreateRetVoid();
+        return theBuilder.CreateRetVoid();
     }
     // retStmt → BREAK SEMICOLON
     else if (this->childPtr[0]->nodeValue->compare("BREAK") == 0)
     {
-        return Builder.CreateBr(generator->blockStack.top());
+        return theBuilder.CreateBr(generator->blockStack.top());
     }
     else
     {
@@ -1230,9 +1187,9 @@ llvm::Value* astNode::IRBuildPrint(bool isPrintln, bool isPrintf)
     while (true)
     {
         llvm::Value* tmp = node->childPtr[0]->IRBuildExp();
-        if (tmp->getType() == llvm::Type::getFloatTy(theContext))
+        if (tmp->getType() == theBuilder.getFloatTy())
         {
-            tmp = Builder.CreateFPExt(tmp, llvm::Type::getDoubleTy(theContext), "tmpDouble");
+            tmp = theBuilder.CreateFPExt(tmp, theBuilder.getDoubleTy(), "tmpDouble");
         }
         if (node->childNum == 1)
         {
@@ -1251,39 +1208,40 @@ llvm::Value* astNode::IRBuildPrint(bool isPrintln, bool isPrintf)
     }
     if (isPrintf)
     {
-        return Builder.CreateCall(generator->printf, *printArgs, "printf");
+        return theBuilder.CreateCall(generator->printf, *printArgs, "printf");
     }
 
     for (auto& argValue : *printArgs)
     {
 
-        if (argValue->getType() == Builder.getInt32Ty())
+        if (argValue->getType() == theBuilder.getInt32Ty())
         {
             formatStr += "%d";
         }
-        else if (argValue->getType() == Builder.getInt8Ty())
+        else if (argValue->getType() == theBuilder.getInt8Ty())
         {
             formatStr += "%c";
         }
-        else if (argValue->getType() == Builder.getInt1Ty())
+        else if (argValue->getType() == theBuilder.getInt1Ty())
         {
             formatStr += "%d";
         }
-        else if (argValue->getType() == Builder.getDoubleTy())
+        else if (argValue->getType() == theBuilder.getDoubleTy())
         {
             formatStr += "%lf";
         }
-        else if (argValue->getType() == Builder.getInt8PtrTy())
+        else if (argValue->getType() == theBuilder.getInt8PtrTy())
         {
             formatStr += "%s";
         }
-        else if (argValue->getType()->getPointerElementType()->isArrayTy() && argValue->getType()->getPointerElementType()->getArrayElementType() == Builder.getInt8Ty())
+        else if (argValue->getType()->getPointerElementType()->isArrayTy() && argValue->getType()->getPointerElementType()->getArrayElementType() == theBuilder.getInt8Ty())
         {
             formatStr += "%s";
-            std::vector<llvm::Value*> indexList;
-            indexList.push_back(Builder.getInt32(0));
-            indexList.push_back(Builder.getInt32(0));
-            argValue = Builder.CreateGEP(argValue, indexList);
+            llvm::SmallVector<llvm::Value*, 2> indexVector;
+            indexVector.push_back(theBuilder.getInt32(0));
+            indexVector.push_back(theBuilder.getInt32(0));
+            llvm::ArrayRef<llvm::Value*> indexList(indexVector);
+            argValue = theBuilder.CreateGEP(argValue, indexList);
         }
         else
         {
@@ -1295,12 +1253,12 @@ llvm::Value* astNode::IRBuildPrint(bool isPrintln, bool isPrintf)
         formatStr += "\n";
     }
     auto            formatConst  = llvm::ConstantDataArray::getString(theContext, formatStr.c_str());
-    auto            formatStrVar = new llvm::GlobalVariable(*(generator->gModule), llvm::ArrayType::get(Builder.getInt8Ty(), formatStr.size() + 1), true, llvm::GlobalValue::ExternalLinkage, formatConst, ".str");
-    auto            zero         = llvm::Constant::getNullValue(Builder.getInt32Ty());
+    auto            formatStrVar = new llvm::GlobalVariable(*(generator->gModule), llvm::ArrayType::get(theBuilder.getInt8Ty(), formatStr.size() + 1), true, llvm::GlobalValue::ExternalLinkage, formatConst, ".str");
+    auto            zero         = llvm::Constant::getNullValue(theBuilder.getInt32Ty());
     llvm::Constant* indices[]    = {zero, zero};
     auto            varRef       = llvm::ConstantExpr::getGetElementPtr(formatStrVar->getType()->getElementType(), formatStrVar, indices);
     printArgs->insert(printArgs->begin(), varRef);
-    return Builder.CreateCall(generator->printf, *printArgs, "printf");
+    return theBuilder.CreateCall(generator->printf, *printArgs, "printf");
 }
 
 /**
@@ -1313,61 +1271,61 @@ llvm::Value* astNode::IRBuildPrint(bool isPrintln, bool isPrintf)
  */
 llvm::Value* astNode::IRBuildScan()
 {
-#if DEBUG
-    std::cout << "Scan Build Start..." << std::endl;
-#endif
-    std::string                formatStr = "";
-    std::vector<llvm::Value*>* scanArgs  = new std::vector<llvm::Value*>;
-    astNode*                   node      = this->childPtr[1]->childPtr[1];
-    while (true)
-    {
-        if (node->childNum == 1)
-        {
-            scanArgs->push_back(node->childPtr[0]->IRBuildID());
-            break;
-        }
-        else
-        {
-            scanArgs->push_back(node->childPtr[0]->IRBuildID());
-            node = node->childPtr[2];
-        }
-    }
-#if DEBUG
-    std::cout << "argList get..." << std::endl;
-#endif
-    for (auto argValue : *scanArgs)
-    {
-        if (argValue->getType()->getPointerElementType() == Builder.getInt32Ty())
-        {
-            formatStr += "%d";
-        }
-        else if (argValue->getType()->getPointerElementType() == Builder.getInt8Ty())
-        {
-            formatStr += "%c";
-        }
-        else if (argValue->getType()->getPointerElementType() == Builder.getInt1Ty())
-        {
-            formatStr += "%d";
-        }
-        else if (argValue->getType()->getPointerElementType() == Builder.getFloatTy())
-        {
-            formatStr += "%lf";
-        }
-        else if (argValue->getType()->getPointerElementType() == Builder.getInt8PtrTy())
-        {
-            formatStr += "%s";
-        }
-        else
-        {
-            throw("Invalid type to read.\n");
-        }
-    }
-    scanArgs->insert(scanArgs->begin(), Builder.CreateGlobalStringPtr(formatStr));
-    llvm::ArrayRef<llvm::Value*> argList(*scanArgs);
-#if DEBUG
-    std::cout << "Scan Build ok..." << std::endl;
-#endif
-    return Builder.CreateCall(generator->scanf, argList, "scanf");
+    // #if DEBUG
+    //     std::cout << "Scan Build Start..." << std::endl;
+    // #endif
+    //     std::string                formatStr = "";
+    //     std::vector<llvm::Value*>* scanArgs  = new std::vector<llvm::Value*>;
+    //     astNode*                   node      = this->childPtr[1]->childPtr[1];
+    //     while (true)
+    //     {
+    //         if (node->childNum == 1)
+    //         {
+    //             scanArgs->push_back(node->childPtr[0]->IRBuildID());
+    //             break;
+    //         }
+    //         else
+    //         {
+    //             scanArgs->push_back(node->childPtr[0]->IRBuildID());
+    //             node = node->childPtr[2];
+    //         }
+    //     }
+    // #if DEBUG
+    //     std::cout << "argList get..." << std::endl;
+    // #endif
+    //     for (auto argValue : *scanArgs)
+    //     {
+    //         if (argValue->getType()->getPointerElementType() == theBuilder.getInt32Ty())
+    //         {
+    //             formatStr += "%d";
+    //         }
+    //         else if (argValue->getType()->getPointerElementType() == theBuilder.getInt8Ty())
+    //         {
+    //             formatStr += "%c";
+    //         }
+    //         else if (argValue->getType()->getPointerElementType() == theBuilder.getInt1Ty())
+    //         {
+    //             formatStr += "%d";
+    //         }
+    //         else if (argValue->getType()->getPointerElementType() == theBuilder.getFloatTy())
+    //         {
+    //             formatStr += "%lf";
+    //         }
+    //         else if (argValue->getType()->getPointerElementType()->isArrayTy() && argValue->getType()->getPointerElementType()->getArrayElementType() == theBuilder.getInt8Ty())
+    //         {
+    //             formatStr += "%s";
+    //         }
+    //         else
+    //         {
+    //             throw("Invalid type to read.\n");
+    //         }
+    //     }
+    //     scanArgs->insert(scanArgs->begin(), theBuilder.CreateGlobalStringPtr(formatStr));
+    //     llvm::ArrayRef<llvm::Value*> argList(*scanArgs);
+    // #if DEBUG
+    //     std::cout << "Scan Build ok..." << std::endl;
+    // #endif
+    //     return theBuilder.CreateCall(generator->scanf, argList, "scanf");
 }
 
 /**
@@ -1380,7 +1338,7 @@ llvm::Value* astNode::IRBuildScan()
 llvm::Value* astNode::IRBuildID()
 {
     //查找局部变量
-    llvm::Value* var = generator->funcStack.top()->getValueSymbolTable()->lookup(*this->childPtr[0]->nodeName);
+    llvm::Value* var = theBuilder.GetInsertBlock()->getParent()->getValueSymbolTable()->lookup(*this->childPtr[0]->nodeName);
     if (var == nullptr)
     {
         // 查找全局变量
@@ -1403,9 +1361,8 @@ llvm::Value* astNode::IRBuildID()
                 indexVector.push_back(const0);
                 indexVector.push_back(index);
                 llvm::ArrayRef<llvm::Value*> indexList(indexVector);
-                llvm::Value*                 arrayPtr = Builder.CreateInBoundsGEP(var, indexList, "tmpArry");
+                llvm::Value*                 arrayPtr = theBuilder.CreateGEP(var, indexList, "tmpArry");
                 return arrayPtr;
-                // return Builder.CreateLoad(arrayPtr->getType()->getPointerElementType(), arrayPtr, "arrayTmp");
             }
             else if (this->childPtr[1]->childNum == 2)
             {
@@ -1428,7 +1385,7 @@ llvm::Value* astNode::IRBuildID()
 /**
  * @description: 二元运算隐式类型转换
  * @param {llvm::Value*} elem1 待类型转换元素
- * @param {llvm::Value*} elem2 目标类型元素
+ * @param {llvm::Type*} type2 目标类型
  * @return {*}
  */
 llvm::Value* astNode::typeCast(llvm::Value* elem1, llvm::Type* type2)
@@ -1436,32 +1393,32 @@ llvm::Value* astNode::typeCast(llvm::Value* elem1, llvm::Type* type2)
     llvm::Type*                type1 = elem1->getType();
     llvm::Instruction::CastOps op;
     // int -> char
-    if (type1 == llvm::Type::getInt32Ty(theContext) && type2 == llvm::Type::getInt8Ty(theContext))
+    if (type1 == theBuilder.getInt32Ty() && type2 == theBuilder.getInt8Ty())
     {
         op = llvm::Instruction::CastOps::Trunc;
     }
     // int -> float
-    else if (type1 == llvm::Type::getInt32Ty(theContext) && type2 == llvm::Type::getFloatTy(theContext))
+    else if (type1 == theBuilder.getInt32Ty() && type2 == theBuilder.getFloatTy())
     {
         op = llvm::Instruction::CastOps::SIToFP;
     }
     // char -> int
-    else if (type1 == llvm::Type::getInt8Ty(theContext) && type2 == llvm::Type::getInt32Ty(theContext))
+    else if (type1 == theBuilder.getInt8Ty() && type2 == theBuilder.getInt32Ty())
     {
         op = llvm::Instruction::CastOps::ZExt;
     }
     // char -> float
-    else if (type1 == llvm::Type::getInt8Ty(theContext) && type2 == llvm::Type::getFloatTy(theContext))
+    else if (type1 == theBuilder.getInt8Ty() && type2 == theBuilder.getFloatTy())
     {
         op = llvm::Instruction::CastOps::UIToFP;
     }
     // float -> int
-    else if (type1 == llvm::Type::getFloatTy(theContext) && type2 == llvm::Type::getInt32Ty(theContext))
+    else if (type1 == theBuilder.getFloatTy() && type2 == theBuilder.getInt32Ty())
     {
         op = llvm::Instruction::CastOps::FPToSI;
     }
     // float -> char
-    else if (type1 == llvm::Type::getFloatTy(theContext) && type2 == llvm::Type::getInt8Ty(theContext))
+    else if (type1 == theBuilder.getFloatTy() && type2 == theBuilder.getInt8Ty())
     {
         op = llvm::Instruction::CastOps::FPToUI;
     }
@@ -1469,7 +1426,7 @@ llvm::Value* astNode::typeCast(llvm::Value* elem1, llvm::Type* type2)
     {
         throw("TypeCast Failed\n");
     }
-    return Builder.CreateCast(op, elem1, type2, "typeCast");
+    return theBuilder.CreateCast(op, elem1, type2, "typeCast");
 }
 
 /**

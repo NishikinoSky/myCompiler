@@ -53,8 +53,9 @@ int main()
     yyparse();
 
 #if DEBUG
-    std::cout << "[DEBUG] yyparse()" << std::endl;
+    std::cout << "[DEBUG] yyparse() finish" << std::endl;
 #endif
+
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
     llvm::InitializeNativeTargetAsmParser();
